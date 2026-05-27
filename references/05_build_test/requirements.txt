@@ -1,0 +1,5 @@
+matplotlib>=3.10,<4
+numpy>=2.2,<3
+python-can>=4.6,<5
+pyserial>=3.5,<4
+pyinstaller>=6.14,<7

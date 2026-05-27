@@ -1,0 +1,2126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>夹爪控制系统 UI 原型</title>
+  <style>
+    :root {
+      --bg: #eef1f4;
+      --panel: #ffffff;
+      --panel-2: #f7f9fb;
+      --text: #18212b;
+      --muted: #66717f;
+      --line: #d7dde5;
+      --accent: #1677ff;
+      --ok: #148f58;
+      --warn: #b76a00;
+      --danger: #c62828;
+      --blocked: #4f5663;
+      --radius: 6px;
+      --shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-width: 1180px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    .app {
+      height: 100vh;
+      display: grid;
+      grid-template-columns: 248px minmax(660px, 1fr) 380px;
+      grid-template-rows: 56px 1fr 210px;
+      gap: 10px;
+      padding: 10px;
+    }
+
+    header {
+      grid-column: 1 / 4;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 0 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 16px;
+      font-weight: 650;
+    }
+
+    .title .sub {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .controller-strip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .state-chip {
+      display: grid;
+      gap: 2px;
+      min-width: 86px;
+      padding: 5px 8px;
+      border: 1px solid #d4dbe4;
+      border-radius: 4px;
+      background: #f8fafc;
+    }
+
+    .state-chip .label {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.1;
+    }
+
+    .state-chip .value {
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.15;
+      white-space: nowrap;
+    }
+
+    aside,
+    main,
+    .right,
+    .log-panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    aside {
+      grid-row: 2 / 3;
+      padding: 12px;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
+
+    main {
+      grid-row: 2 / 3;
+      padding: 12px;
+      overflow: auto;
+    }
+
+    .right {
+      grid-row: 2 / 3;
+      padding: 12px;
+      overflow: auto;
+    }
+
+    .log-panel {
+      grid-column: 1 / 4;
+      grid-row: 3 / 4;
+      display: grid;
+      grid-template-rows: 42px 1fr;
+    }
+
+    h2,
+    h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    h3 {
+      margin-bottom: 10px;
+    }
+
+    .section {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-2);
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .section:last-child {
+      margin-bottom: 0;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .field {
+      display: grid;
+      gap: 5px;
+    }
+
+    label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    input,
+    select {
+      width: 100%;
+      height: 32px;
+      padding: 0 8px;
+      border: 1px solid #c7d0da;
+      border-radius: 4px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+    }
+
+    .checkline {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 32px;
+      color: var(--text);
+    }
+
+    button {
+      height: 34px;
+      border: 1px solid #b8c4d2;
+      border-radius: 4px;
+      background: #fff;
+      color: var(--text);
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0 10px;
+      white-space: nowrap;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.46;
+      background: #f3f5f7;
+      color: #66717f;
+    }
+
+    button.busy {
+      cursor: progress;
+      border-color: #7aa7e6;
+      background: #e8f1ff;
+      color: #0a58ca;
+    }
+
+    button.flash-ok {
+      outline: 2px solid #90d0ad;
+    }
+
+    button.flash-error {
+      outline: 2px solid #ef9a9a;
+    }
+
+    .primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .danger {
+      background: var(--danger);
+      border-color: var(--danger);
+      color: #fff;
+    }
+
+    .warn {
+      background: #fff4e0;
+      border-color: #e3a33b;
+      color: #734600;
+    }
+
+    .disabled {
+      opacity: 0.48;
+      background: #f3f5f7;
+    }
+
+    .interaction-hint {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border: 1px solid #c8d7ef;
+      border-radius: var(--radius);
+      background: #f0f6ff;
+      color: #23466f;
+      font-size: 12px;
+      min-height: 34px;
+    }
+
+    .nav {
+      display: grid;
+      gap: 8px;
+    }
+
+    .nav button {
+      text-align: left;
+      height: 38px;
+      border-color: transparent;
+      background: transparent;
+    }
+
+    .nav button.active {
+      background: #e8f1ff;
+      border-color: #b7d2ff;
+      color: #0a58ca;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .metric {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 8px;
+      min-height: 58px;
+    }
+
+    .metric .name {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .metric .value {
+      font-size: 18px;
+      font-weight: 650;
+    }
+
+    .unit {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+      margin-left: 3px;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .badge {
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 12px;
+      background: #eef2f6;
+      border: 1px solid #d4dbe4;
+      color: #344054;
+    }
+
+    .badge.ok {
+      background: #e7f6ef;
+      border-color: #abd9c1;
+      color: #0d6a40;
+    }
+
+    .badge.warn {
+      background: #fff4e0;
+      border-color: #efc474;
+      color: #734600;
+    }
+
+    .badge.danger {
+      background: #fde8e8;
+      border-color: #efb0b0;
+      color: #a31818;
+    }
+
+    .badge.blocked {
+      background: #eceff3;
+      border-color: #c8ced8;
+      color: #3c4654;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 8px;
+    }
+
+    .tabs button {
+      height: 32px;
+      background: #fff;
+    }
+
+    .tabs button.active {
+      background: #e8f1ff;
+      border-color: #9fc3ff;
+      color: #0a58ca;
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    .mode-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .direction-box {
+      border: 1px solid #efc474;
+      background: #fffaf0;
+      border-radius: var(--radius);
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .block-box {
+      border: 1px solid #efb0b0;
+      background: #fff1f1;
+      border-radius: var(--radius);
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .log-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+      padding: 0 12px;
+      background: var(--panel-2);
+    }
+
+    .log {
+      margin: 0;
+      padding: 10px 12px;
+      overflow: auto;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      color: #1f2937;
+      background: #ffffff;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 10px;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--line);
+      margin: 10px 0;
+    }
+
+    .param-table {
+      display: grid;
+      gap: 6px;
+    }
+
+    .param-row {
+      display: grid;
+      grid-template-columns: minmax(118px, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 30px;
+      padding: 6px 8px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #fff;
+    }
+
+    .param-row .name {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .param-row .value {
+      font-weight: 650;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .state-summary {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .state-card {
+      min-height: 54px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #fff;
+    }
+
+    .state-card .name {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .state-card .value {
+      font-size: 16px;
+      font-weight: 650;
+      line-height: 1.2;
+    }
+
+    .state-card.wide {
+      grid-column: 1 / -1;
+    }
+
+    .state-card .mono {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
+
+    .stroke-slider {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #fff;
+    }
+
+    .stroke-slider-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .stroke-slider-title {
+      font-weight: 650;
+      font-size: 13px;
+    }
+
+    .stroke-slider-value {
+      font-weight: 650;
+      color: #0a58ca;
+      white-space: nowrap;
+    }
+
+    input[type="range"] {
+      padding: 0;
+      height: 24px;
+      accent-color: var(--accent);
+    }
+
+    input[type="range"]:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .range-labels {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .slider-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .config-groups {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .config-section {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      padding: 10px;
+      min-width: 0;
+    }
+
+    .config-section h3 {
+      margin-bottom: 8px;
+    }
+
+    .config-section .param-row {
+      grid-template-columns: minmax(150px, 1fr) minmax(120px, auto);
+    }
+
+    .runtime-window {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid #b7d2ff;
+      border-radius: var(--radius);
+      background: #f4f8ff;
+    }
+
+    .trace-panel {
+      display: grid;
+      gap: 8px;
+    }
+
+    .trace-canvas {
+      width: 100%;
+      height: 260px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #fff;
+    }
+
+    .trace-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .trace-summary span {
+      padding: 3px 6px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #fff;
+    }
+
+    .trace-color-controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #f8fafc;
+    }
+
+    .trace-color-control {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+      color: #475467;
+      font-size: 12px;
+    }
+
+    .trace-color-control input[type="color"] {
+      width: 34px;
+      height: 26px;
+      flex: 0 0 auto;
+      padding: 1px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="title">
+        夹爪控制系统
+        <span class="sub">UI 原型 · 普通控制 / 维护模式 / 管理员恢复</span>
+      </div>
+      <div class="header-actions">
+        <div class="controller-strip" aria-label="控制器状态">
+          <div class="state-chip">
+            <div class="label">控制器状态</div>
+            <div id="stateText" class="value">Disconnected</div>
+          </div>
+          <div class="state-chip">
+            <div class="label">通信</div>
+            <div id="commText" class="value">未连接</div>
+          </div>
+          <div class="state-chip">
+            <div class="label">电机输出</div>
+            <div id="motorOutputText" class="value">失能</div>
+          </div>
+          <div class="state-chip">
+            <div class="label">流程阶段</div>
+            <div id="workflowText" class="value">待连接</div>
+          </div>
+          <span id="directionBadge" class="badge warn">方向可信度：ConfigOnly</span>
+          <span id="adminBadge" class="badge blocked">管理员：未进入</span>
+        </div>
+        <button class="warn" data-action="clear_fault" data-requires="active_stop">恢复 ActiveStop</button>
+        <button class="danger" data-action="stop" data-requires="connected">停止并失能</button>
+      </div>
+    </header>
+
+    <aside>
+      <div class="section">
+        <h3>连接</h3>
+        <div class="field">
+          <label>适配器</label>
+          <select disabled>
+            <option>DM-USB2FDCAN_Dual</option>
+            <option>Simulated</option>
+          </select>
+        </div>
+        <div class="grid-2" style="margin-top: 8px;">
+          <div class="field">
+            <label>设备端口</label>
+            <input value="1,9" readonly>
+          </div>
+          <div class="field">
+            <label>电机 ID</label>
+            <input value="0x01" readonly>
+          </div>
+        </div>
+        <div class="button-row" style="margin-top: 10px;">
+          <button class="primary" data-action="connect" data-requires="disconnected">连接</button>
+          <button data-action="disconnect" data-requires="connected">断开</button>
+        </div>
+        <div id="interactionHint" class="interaction-hint">未连接：只允许连接硬件。</div>
+      </div>
+
+      <div class="section">
+        <h3>导航</h3>
+        <div class="nav">
+          <button class="active" data-tab-target="normal">普通控制</button>
+          <button data-tab-target="selfcheck">自检流程</button>
+          <button data-tab-target="maintenance">维护模式</button>
+          <button data-tab-target="config">配置参数</button>
+          <button data-tab-target="diagnostics">日志与诊断</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>权限</h3>
+        <div class="field">
+          <label>当前权限</label>
+          <select disabled>
+            <option>Operator</option>
+            <option selected>Service</option>
+            <option>Engineering</option>
+          </select>
+        </div>
+        <label class="checkline">
+          <input type="checkbox" checked>
+          已确认维护风险
+        </label>
+      </div>
+    </aside>
+
+    <main>
+      <div class="tabs">
+        <button class="active" data-tab-target="normal">普通控制</button>
+        <button data-tab-target="selfcheck">自检流程</button>
+        <button data-tab-target="maintenance">维护模式</button>
+        <button data-tab-target="config">配置参数</button>
+        <button data-tab-target="diagnostics">日志与诊断</button>
+      </div>
+
+      <div class="tab-panel active" data-tab-panel="normal">
+        <div class="section">
+          <h3>普通控制区</h3>
+          <div class="grid-2" style="margin-bottom: 10px;">
+            <div class="field">
+              <label>目标夹紧力 N</label>
+              <input id="forceN" type="number" step="1" value="20">
+            </div>
+            <div class="field">
+              <label>夹紧速度 mm/s</label>
+              <input id="speedMm" type="number" step="0.1" value="1.0">
+            </div>
+          </div>
+          <div class="button-row">
+            <button data-action="clamp" data-requires="ready">目标力夹紧</button>
+            <button data-action="release" data-requires="connected">释放</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-tab-panel="selfcheck">
+        <div class="section">
+          <h3>自检流程</h3>
+          <div class="badge-row">
+            <span class="badge warn">PreSelfCheck 建立低置信临时安全区</span>
+            <span class="badge warn">MotionHealthCheck 后进入最终置信范围</span>
+            <span class="badge ok">流程完成后电机失能</span>
+          </div>
+          <div class="divider"></div>
+          <div class="button-row">
+            <button data-action="selfcheck" data-requires="connected_not_bringup">预自检</button>
+            <button data-action="home" data-requires="enabled_selfcheck">回零</button>
+            <button data-action="learn" data-requires="homed">行程学习</button>
+            <button data-action="health" data-requires="limits">运动健康检查</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>流程状态</h3>
+          <div class="param-table">
+            <div class="param-row">
+              <div class="name">PreSelfCheck</div>
+              <div id="selfcheckDoneText" class="value">-</div>
+            </div>
+            <div class="param-row">
+              <div class="name">PreB 机构诊断</div>
+              <div id="preBMechanismText" class="value">-</div>
+            </div>
+            <div class="param-row">
+              <div class="name">PreB 曲线样本</div>
+              <div id="preBTraceText" class="value">-</div>
+            </div>
+            <div class="param-row">
+              <div class="name">回零</div>
+              <div id="homedText" class="value">-</div>
+            </div>
+            <div class="param-row">
+              <div class="name">行程学习</div>
+              <div id="limitsDoneText" class="value">-</div>
+            </div>
+            <div class="param-row">
+              <div class="name">运动健康检查</div>
+              <div id="healthDoneText" class="value">-</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section trace-panel">
+          <div class="mode-title">
+            <h3>PreB 电流-行程曲线</h3>
+            <span id="preBTraceSummary" class="subtle">-</span>
+          </div>
+          <canvas id="preBCurrentTrace" class="trace-canvas" width="720" height="260"></canvas>
+          <div class="trace-color-controls" aria-label="PreB 曲线颜色设置">
+            <label class="trace-color-control">打开曲线
+              <input id="preBTraceColorOpening" type="color" data-trace-color="opening">
+            </label>
+            <label class="trace-color-control">闭合曲线
+              <input id="preBTraceColorClosing" type="color" data-trace-color="closing">
+            </label>
+            <label class="trace-color-control">未知/诊断
+              <input id="preBTraceColorUnknown" type="color" data-trace-color="unknown">
+            </label>
+          </div>
+          <div class="trace-summary">
+            <span>横轴 mm</span>
+            <span>纵轴 |A|</span>
+            <span>颜色按下方设置</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-tab-panel="maintenance">
+        <div class="section">
+        <div class="mode-title">
+          <h2>维护模式分区</h2>
+          <span class="subtle">维护模式不会直接进入 Ready，退出后需要重新自检</span>
+        </div>
+        <div class="grid-2">
+          <div class="section">
+            <h3>电机空载调试 MotorBringup</h3>
+            <div class="badge-row">
+              <span class="badge warn">结构未安装/已确认空载</span>
+              <span class="badge ok">短时点动</span>
+              <span class="badge ok">命令后失能</span>
+            </div>
+            <div class="divider"></div>
+            <div class="grid-2">
+              <div class="field">
+                <label>方向窗口 rad</label>
+                <input id="jogRad" type="number" step="0.01" value="0.20">
+              </div>
+              <div class="field">
+                <label>点动速度 rad/s</label>
+                <input id="jogVel" type="number" step="0.01" value="0.50">
+              </div>
+              <div class="field">
+                <label>反馈电流中止 A</label>
+                <input id="jogCur" type="number" step="0.01" value="0.50">
+              </div>
+              <div class="field">
+                <label>持续时间 s</label>
+                <input id="jogSec" type="number" step="0.01" value="0.30">
+              </div>
+              <div class="field">
+                <label>精确转动圈数 rev</label>
+                <input id="turnRev" type="number" step="0.25" value="1.00">
+              </div>
+              <div class="field">
+                <label>位置到位速度 rad/s</label>
+                <input id="turnVel" type="number" step="0.1" value="1.00">
+              </div>
+              <div class="field">
+                <label>反馈电流中止 A</label>
+                <input id="turnCur" type="number" step="0.1" value="1.50">
+              </div>
+              <div class="field">
+                <label>到位超时 s</label>
+                <input id="turnTimeout" type="number" step="0.1" value="0.00">
+              </div>
+              <label class="checkline">
+                <input id="safeConfirm" type="checkbox" checked>
+                空载确认
+              </label>
+            </div>
+            <div class="runtime-window">
+              <div class="mode-title">
+                <h3>达妙运行窗口</h3>
+                <span id="bringupRuntimeWindowNote" class="subtle">等待读取运行时限制</span>
+              </div>
+              <div class="state-summary">
+                <div class="state-card">
+                  <div class="name">P_MAX</div>
+                  <div class="value"><span id="bringupRuntimePmax">-</span><span class="unit">rad</span></div>
+                </div>
+                <div class="state-card">
+                  <div class="name">VMAX</div>
+                  <div class="value"><span id="bringupRuntimeVmax">-</span><span class="unit">rad/s</span></div>
+                </div>
+                <div class="state-card">
+                  <div class="name">TMAX</div>
+                  <div class="value"><span id="bringupRuntimeTmax">-</span><span class="unit">Nm</span></div>
+                </div>
+                <div class="state-card">
+                  <div class="name">当前电机多圈位置</div>
+                  <div class="value"><span id="bringupMotorPosition">-</span><span class="unit">rad</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="button-row" style="margin-top: 10px;">
+              <button data-action="jog_pos" data-requires="bringup">电机正向点动</button>
+              <button data-action="jog_neg" data-requires="bringup">电机反向点动</button>
+              <button data-action="turn_pos" data-requires="bringup">精确正向转动</button>
+              <button data-action="turn_neg" data-requires="bringup">精确反向转动</button>
+              <button data-action="turn_custom" data-requires="bringup">按输入圈数转动</button>
+              <button data-action="turn_pos" data-turn-rev="2" data-requires="bringup">正向 2 圈</button>
+              <button data-action="turn_neg" data-turn-rev="2" data-requires="bringup">反向 2 圈</button>
+              <button data-action="feedback" data-requires="bringup">读取反馈</button>
+              <button data-action="can_probe" data-requires="bringup">CAN 探测</button>
+              <button data-action="enter_bringup" data-requires="connected_safe">进入 Bring-up</button>
+              <button data-action="bringup_enable" data-requires="bringup">Bring-up 使能</button>
+              <button data-action="bringup_disable" data-requires="connected">Bring-up 失能</button>
+              <button data-action="exit_bringup" data-requires="bringup">退出 Bring-up</button>
+              <button class="danger" data-action="stop" data-requires="connected">停止并失能</button>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>管理员恢复 AdminRecovery</h3>
+            <div class="badge-row">
+              <span class="badge blocked">当前：未允许升流</span>
+              <span class="badge warn">方向：ConfigOnly</span>
+              <span class="badge danger">阻止：需方向试探</span>
+            </div>
+            <div class="divider"></div>
+            <div class="grid-2">
+              <div class="field">
+                <label>恢复权限</label>
+                <select>
+                  <option>Service</option>
+                  <option>Engineering</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>恢复方向</label>
+                <select>
+                  <option selected>打开</option>
+                  <option>闭合</option>
+                </select>
+              </div>
+            </div>
+            <div class="button-row" style="margin-top: 10px;">
+              <button class="primary" data-ui-action="admin_enter" data-requires="connected">进入恢复模式</button>
+              <button data-ui-action="admin_probe" data-requires="admin" data-unimplemented="true">低能量方向试探</button>
+              <button data-ui-action="admin_high_current" data-requires="admin_direction_verified" data-unimplemented="true">高电流打开</button>
+              <button data-ui-action="admin_exit" data-requires="admin">退出恢复</button>
+            </div>
+            <div class="divider"></div>
+            <h3>恢复后要求</h3>
+            <div class="badge-row">
+              <span class="badge danger">禁止直接 Ready</span>
+              <span class="badge warn">需重新预自检</span>
+              <span class="badge warn">需重新回零</span>
+              <span class="badge warn">需重新学习行程</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="section">
+          <h3>管理员恢复参数</h3>
+          <div class="grid-3">
+            <div class="field">
+              <label>试探电流 A</label>
+              <input value="0.15">
+            </div>
+            <div class="field">
+              <label>试探速度 mm/s</label>
+              <input value="0.20">
+            </div>
+            <div class="field">
+              <label>试探时间 s</label>
+              <input value="0.20">
+            </div>
+            <div class="field">
+              <label>维护电流上限 A</label>
+              <input value="0.80">
+            </div>
+            <div class="field">
+              <label>工程电流上限 A</label>
+              <input value="1.20">
+            </div>
+            <div class="field">
+              <label>单次点动上限 s</label>
+              <input value="0.50">
+            </div>
+          </div>
+          <div class="button-row" style="margin-top: 10px;">
+            <button data-ui-action="admin_save_params" data-requires="admin" data-unimplemented="true">保存本次参数</button>
+            <button data-ui-action="admin_reset_params" data-requires="admin" data-unimplemented="true">恢复默认限制</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>方向保护</h3>
+          <div class="direction-box">
+            <div><strong>打开方向可信度：</strong>ConfigOnly</div>
+            <div><strong>高电流恢复：</strong>禁止</div>
+            <div><strong>下一步：</strong>执行低能量方向试探</div>
+          </div>
+          <div class="block-box" style="margin-top: 10px;">
+            <div><strong>阻止原因：</strong>OpenDirectionUnknown</div>
+            <div>方向未由自检、回零、行程学习或低能量试探确认。</div>
+          </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-tab-panel="config">
+        <div class="section">
+          <div class="mode-title">
+            <h2>配置参数</h2>
+            <span class="subtle">只读显示当前已加载配置；修改参数请维护 yaml 配置文件后重启程序</span>
+          </div>
+          <div class="badge-row">
+            <span class="badge ok">来源：后端 /api/view 配置快照</span>
+            <span class="badge warn">common 仅定义单位和基础类型，不作为参数组展示</span>
+            <span class="badge warn">达妙运行时 P_MAX/VMAX/TMAX 以硬件读取值优先</span>
+          </div>
+        </div>
+        <div id="configGroups" class="config-groups">
+          <div class="section">配置尚未加载</div>
+        </div>
+        <div id="configCommonNote" class="interaction-hint">
+          common 目录只定义单位、Result、错误码等基础类型。
+        </div>
+      </div>
+
+      <div class="tab-panel" data-tab-panel="diagnostics">
+        <div class="section">
+          <h3>日志与诊断</h3>
+          <div class="badge-row">
+            <span class="badge ok">底部日志可暂停滚动</span>
+            <span class="badge warn">ActiveStop 先看日志再恢复</span>
+            <span class="badge warn">硬件通信诊断在维护模式中执行</span>
+          </div>
+          <div class="divider"></div>
+          <div class="button-row">
+            <button data-action="feedback" data-requires="bringup">读取 Bring-up 反馈</button>
+            <button data-action="can_probe" data-requires="bringup">CAN 探测</button>
+            <button data-action="clear_fault" data-requires="active_stop">恢复 ActiveStop</button>
+            <button class="danger" data-action="stop" data-requires="connected">停止并失能</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <section class="right">
+      <div class="section">
+        <h3>自检 / 自学习参数</h3>
+        <div class="param-table">
+          <div class="param-row">
+            <div class="name">结构参数有效性</div>
+            <div id="profileValidity" class="value">Unknown</div>
+          </div>
+          <div class="param-row">
+            <div class="name">打开起动电流</div>
+            <div id="openingBreakawayCurrent" class="value">- <span class="unit">A</span></div>
+          </div>
+          <div class="param-row">
+            <div class="name">闭合起动电流</div>
+            <div id="closingBreakawayCurrent" class="value">- <span class="unit">A</span></div>
+          </div>
+          <div class="param-row">
+            <div class="name">打开最低稳定速度</div>
+            <div id="openingStableSpeed" class="value">- <span class="unit">mm/s</span></div>
+          </div>
+          <div class="param-row">
+            <div class="name">闭合最低稳定速度</div>
+            <div id="closingStableSpeed" class="value">- <span class="unit">mm/s</span></div>
+          </div>
+          <div class="param-row">
+            <div class="name">静摩擦估计</div>
+            <div id="staticFriction" class="value">-</div>
+          </div>
+          <div class="param-row">
+            <div class="name">动摩擦估计</div>
+            <div id="dynamicFriction" class="value">-</div>
+          </div>
+          <div class="param-row">
+            <div class="name">软件安全区</div>
+            <div id="safeZone" class="value">-</div>
+          </div>
+          <div class="param-row">
+            <div class="name">当前滑块范围</div>
+            <div id="manualStrokeRange" class="value">-</div>
+          </div>
+          <div class="param-row">
+            <div class="name">摩擦异常候选</div>
+            <div id="frictionAnomaly" class="value">-</div>
+          </div>
+        </div>
+        <div class="badge-row">
+          <span class="badge warn">低置信参数需继续回零/行程学习验证</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>夹爪状态</h3>
+        <div class="state-summary">
+          <div class="state-card">
+            <div class="name">螺母行程</div>
+            <div class="value"><span id="stroke">0.000</span><span class="unit">mm</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">夹爪角度</div>
+            <div class="value"><span id="angle">0.000</span><span class="unit">rad</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">虚拟多圈电机位置</div>
+            <div class="value"><span id="motorPos">0.000</span><span class="unit">rad</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">单帧协议位置</div>
+            <div class="value"><span id="wrappedPos">0.000</span><span class="unit">rad</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">q_uint 诊断</div>
+            <div class="value"><span id="rawCounts">-</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">P_MAX</div>
+            <div class="value"><span id="runtimePmax">-</span><span class="unit">rad</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">VMAX</div>
+            <div class="value"><span id="runtimeVmax">-</span><span class="unit">rad/s</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">TMAX</div>
+            <div class="value"><span id="runtimeTmax">-</span><span class="unit">Nm</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">编码器零点</div>
+            <div class="value"><span id="nutZero">-</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">电机增量</div>
+            <div class="value"><span id="motorDeltaRev">-</span><span class="unit">rev</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">导程估计</div>
+            <div class="value"><span id="mmPerRev">-</span><span class="unit">mm/rev</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">编码器数据</div>
+            <div class="value"><span id="encoderFresh">-</span></div>
+          </div>
+          <div class="state-card wide">
+            <div class="name">原始反馈帧</div>
+            <div class="value mono"><span id="rawFrame">-</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">电机速度</div>
+            <div class="value"><span id="velocity">0.000</span><span class="unit">rad/s</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">电流</div>
+            <div class="value"><span id="current">0.000</span><span class="unit">A</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">力矩</div>
+            <div class="value"><span id="torque">0.000</span><span class="unit">Nm</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">温度</div>
+            <div class="value"><span id="temp">0.0</span><span class="unit">C</span></div>
+          </div>
+          <div class="state-card">
+            <div class="name">估算夹紧力</div>
+            <div class="value"><span id="force">0.0</span><span class="unit">N</span></div>
+          </div>
+        </div>
+        <div class="stroke-slider">
+          <div class="stroke-slider-head">
+            <div>
+              <div class="stroke-slider-title">螺母位置拖动</div>
+              <div id="strokeSliderMode" class="subtle">未完成预自检，滑块不可用</div>
+            </div>
+            <div id="strokeSliderValue" class="stroke-slider-value">- mm</div>
+          </div>
+          <input id="strokeSlider" type="range" min="0" max="16" step="0.01" value="0" disabled>
+          <div class="range-labels">
+            <span id="strokeSliderMin">-</span>
+            <span id="strokeSliderMax">-</span>
+          </div>
+          <div id="strokeSliderNote" class="slider-note">
+            完成 PreSelfCheck 后，结构未安装/空载确认时可在低置信边界内验证 2mm/rev；未确认空载时只允许小步验证。
+          </div>
+          <label class="checkline" style="margin-top: 8px;">
+            <input id="sliderUnloadedConfirm" type="checkbox">
+            结构未安装/空载确认，允许完整低置信边界内限流拖动
+          </label>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>最近审计记录</h3>
+        <div class="field">
+          <label>权限</label>
+          <input value="Service" readonly>
+        </div>
+        <div class="field" style="margin-top: 8px;">
+          <label>命令</label>
+          <input value="AdminDirectionProbe(open)" readonly>
+        </div>
+        <div class="field" style="margin-top: 8px;">
+          <label>结果</label>
+          <input value="Blocked: OpenDirectionUnknown" readonly>
+        </div>
+      </div>
+    </section>
+
+    <section class="log-panel">
+      <div class="log-head">
+        <h2>运行日志</h2>
+        <div class="button-row">
+          <button id="pauseLogButton">暂停滚动</button>
+          <button data-ui-action="copy_log">复制选中</button>
+          <button data-ui-action="export_log">导出日志</button>
+          <button data-ui-action="clear_log">清空</button>
+        </div>
+      </div>
+      <pre id="log" class="log"></pre>
+    </section>
+  </div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const fmt = (v, n = 3) => Number.isFinite(Number(v)) ? Number(v).toFixed(n) : "-";
+    let pauseLog = false;
+    let adminMode = false;
+    let adminDirectionVerified = false;
+    let lastView = null;
+    let busyButton = null;
+    let strokeSliderDragging = false;
+    const traceColorStorageKey = "gripperPreBTraceColors";
+    const defaultPreBTraceColors = {
+      opening: "#0a58ca",
+      closing: "#087f5b",
+      unknown: "#667085"
+    };
+    let preBTraceColors = { ...defaultPreBTraceColors };
+
+    const requirementText = {
+      disconnected: "仅在未连接时可用",
+      connected: "需要先连接硬件",
+      connected_safe: "需要连接硬件并勾选空载/安全确认",
+      connected_not_bringup: "需要连接，且不能处于 Bring-up 模式",
+      bringup: "需要先进入 Bring-up",
+      bringup_enabled: "需要进入 Bring-up 并完成 Bring-up 使能",
+      enabled_selfcheck: "需要已使能并完成 PreSelfCheck",
+      homed: "需要先完成回零",
+      limits: "需要先完成行程学习",
+      ready: "需要控制器达到 Ready/健康检查完成",
+      active_stop: "仅在 ActiveStop 状态下可用",
+      admin: "需要先进入管理员恢复模式",
+      admin_direction_verified: "需要管理员模式下完成方向确认"
+    };
+
+    function setText(id, value) {
+      const element = $(id);
+      if (element) {
+        element.textContent = value;
+      }
+    }
+
+    function setBadge(id, text, cls) {
+      const element = $(id);
+      if (!element) {
+        return;
+      }
+      element.className = `badge ${cls}`;
+      element.textContent = text;
+    }
+
+    function valueWithUnit(value, digits, unit) {
+      if (!Number.isFinite(Number(value))) {
+        return "-";
+      }
+      return `${fmt(value, digits)} ${unit}`;
+    }
+
+    function learnedValueWithUnit(value, sampleCount, digits, unit) {
+      if (Number(sampleCount || 0) <= 0) {
+        return "未学习";
+      }
+      return valueWithUnit(value, digits, unit);
+    }
+
+    function workflowSummary(s) {
+      if (!s.connected) {
+        return "待连接";
+      }
+      if (s.motor_bringup_active) {
+        return "Bring-up";
+      }
+      if (s.self_check_running) {
+        return "自检中";
+      }
+      if (!s.pre_self_check_completed) {
+        return "待预自检";
+      }
+      if (!s.homed) {
+        return "待回零";
+      }
+      if (!s.travel_limits_learned) {
+        return "待行程学习";
+      }
+      if (!s.motion_health_checked) {
+        return "待健康检查";
+      }
+      return "Ready";
+    }
+
+    async function getJson(url) {
+      const response = await fetch(url, { cache: "no-store" });
+      return response.json();
+    }
+
+    function viewPayload(payload) {
+      return payload.view || payload;
+    }
+
+    function isReadyState(data, s) {
+      return data.status_text === "Ready" || !!s.motion_health_checked;
+    }
+
+    function finiteNumber(value) {
+      const number = Number(value);
+      return Number.isFinite(number) ? number : null;
+    }
+
+    function isHexColor(value) {
+      return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
+    }
+
+    function loadPreBTraceColors() {
+      try {
+        const stored = JSON.parse(window.localStorage?.getItem(traceColorStorageKey) || "{}");
+        Object.keys(defaultPreBTraceColors).forEach((key) => {
+          if (isHexColor(stored[key])) {
+            preBTraceColors[key] = stored[key];
+          }
+        });
+      } catch (error) {
+        preBTraceColors = { ...defaultPreBTraceColors };
+      }
+    }
+
+    function savePreBTraceColors() {
+      try {
+        window.localStorage?.setItem(traceColorStorageKey, JSON.stringify(preBTraceColors));
+      } catch (error) {
+        // Browser storage may be disabled; color changes still apply for this page session.
+      }
+    }
+
+    function syncPreBTraceColorInputs() {
+      document.querySelectorAll("input[data-trace-color]").forEach((input) => {
+        const key = input.dataset.traceColor;
+        input.value = preBTraceColors[key] || defaultPreBTraceColors[key] || "#667085";
+      });
+    }
+
+    function preBTraceColorFor(direction) {
+      if (direction === 1) {
+        return preBTraceColors.opening;
+      }
+      if (direction === 2) {
+        return preBTraceColors.closing;
+      }
+      return preBTraceColors.unknown;
+    }
+
+    function sliderRangeFor(s) {
+      const precheckDone = !!s.pre_self_check_completed;
+      const healthDone = !!s.motion_health_checked;
+      const unloadedConfirmed = !!$("sliderUnloadedConfirm")?.checked;
+      if (!precheckDone) {
+        return {
+          enabled: false,
+          mode: "未完成预自检，滑块不可用",
+          note: "完成 PreSelfCheck 后，滑块会使用后端给出的当前允许范围。"
+        };
+      }
+
+      const safeOpen = finiteNumber(s.safe_zone_open_mm);
+      const safeClosed = finiteNumber(s.safe_zone_closed_mm);
+      const manualMin = unloadedConfirmed && !healthDone && safeOpen !== null
+        ? safeOpen
+        : finiteNumber(s.manual_stroke_min_mm);
+      const manualMax = unloadedConfirmed && !healthDone && safeClosed !== null
+        ? safeClosed
+        : finiteNumber(s.manual_stroke_max_mm);
+      const manualValid = !!s.manual_stroke_range_valid &&
+        manualMin !== null && manualMax !== null && manualMax > manualMin;
+
+      if (manualValid) {
+        const lowConfidence = !!s.manual_stroke_low_confidence_window;
+        const fullLowConfidence = unloadedConfirmed && !healthDone;
+        return {
+          enabled: true,
+          min: manualMin,
+          max: manualMax,
+          mode: healthDone && !lowConfidence
+            ? "最终置信运动范围"
+            : (fullLowConfidence ? "空载低置信边界验证范围" : "低置信小步验证范围"),
+          note: healthDone && !lowConfidence
+            ? "运动健康检查已完成。松开滑块后，将在最终软件限位范围内执行受限螺母行程移动。"
+            : (fullLowConfidence
+              ? "已确认结构未安装/空载。可在低置信边界内限流拖动，用于验证电机转数、丝杆导程和螺母行程映射。"
+              : "PreSelfCheck 已完成。未确认空载时只能在低置信小窗口内拖动。")
+        };
+      }
+
+      return {
+        enabled: false,
+        mode: "手动定位范围无效",
+        note: "未收到后端给出的有效手动定位范围，不能启用拖动。请查看自检日志和控制器状态。"
+      };
+    }
+
+    function updateStrokeSlider(s) {
+      const slider = $("strokeSlider");
+      if (!slider) {
+        return;
+      }
+      const range = sliderRangeFor(s);
+      const controls = lastView?.controls || {};
+      const blocked =
+        !range.enabled || !controls.can_move_nut_stroke ||
+        !!s.motor_bringup_active || adminMode ||
+        lastView?.status_text === "ActiveStop" ||
+        lastView?.status_text === "Fault";
+      slider.disabled = blocked;
+      setText("strokeSliderMode", range.mode);
+      setText("strokeSliderNote", blocked && range.enabled
+        ? "当前控制器状态不允许拖动。请确认已连接、未处于维护/故障状态，并已完成必要自检。"
+        : range.note);
+      if (!range.enabled) {
+        setText("strokeSliderValue", "- mm");
+        setText("strokeSliderMin", "-");
+        setText("strokeSliderMax", "-");
+        return;
+      }
+
+      slider.min = String(range.min);
+      slider.max = String(range.max);
+      slider.step = "0.01";
+      const current = finiteNumber(s.stroke_mm);
+      const value = Math.min(range.max, Math.max(range.min, current ?? range.min));
+      if (!strokeSliderDragging) {
+        slider.value = String(value);
+      }
+      setText("strokeSliderValue", `${fmt(slider.value)} mm`);
+      setText("strokeSliderMin", `${fmt(range.min)} mm`);
+      setText("strokeSliderMax", `${fmt(range.max)} mm`);
+    }
+
+    function resizeCanvasToDisplaySize(canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const width = Math.max(320, Math.floor(rect.width));
+      const height = Math.max(180, Math.floor(rect.height));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+    }
+
+    function drawTraceAxes(ctx, width, height, plot, xMin, xMax, yMax) {
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.font = "12px system-ui, -apple-system, Segoe UI, sans-serif";
+      ctx.lineWidth = 1;
+
+      const xTickCount = 6;
+      const yTickCount = 5;
+      ctx.strokeStyle = "#d8e0ea";
+      ctx.fillStyle = "#667085";
+      for (let index = 0; index <= xTickCount; index += 1) {
+        const ratio = index / xTickCount;
+        const x = plot.left + ratio * (plot.right - plot.left);
+        const value = xMin + ratio * (xMax - xMin);
+        ctx.beginPath();
+        ctx.moveTo(x, plot.top);
+        ctx.lineTo(x, plot.bottom);
+        ctx.stroke();
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText(`${fmt(value, 1)} mm`, x, plot.bottom + 6);
+      }
+      for (let index = 0; index <= yTickCount; index += 1) {
+        const ratio = index / yTickCount;
+        const y = plot.bottom - ratio * (plot.bottom - plot.top);
+        const value = ratio * yMax;
+        ctx.beginPath();
+        ctx.moveTo(plot.left, y);
+        ctx.lineTo(plot.right, y);
+        ctx.stroke();
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        ctx.fillText(`${fmt(value, value >= 10 ? 1 : 2)} A`, plot.left - 8, y);
+      }
+
+      ctx.strokeStyle = "#b9c4d0";
+      ctx.beginPath();
+      ctx.moveTo(plot.left, plot.top);
+      ctx.lineTo(plot.left, plot.bottom);
+      ctx.lineTo(plot.right, plot.bottom);
+      ctx.stroke();
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText("行程 mm", (plot.left + plot.right) / 2, height - 4);
+      ctx.save();
+      ctx.translate(13, (plot.top + plot.bottom) / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText("电流 |A|", 0, 0);
+      ctx.restore();
+    }
+
+    function preBTraceSegments(points, xSpan) {
+      const segments = [];
+      let currentSegment = [];
+      let previous = null;
+      const jumpThreshold = Math.max(0.8, xSpan * 0.18);
+      points.forEach((point) => {
+        const segmentChanged =
+          previous && point.segment !== null && previous.segment !== null &&
+          point.segment !== previous.segment;
+        const directionChanged = previous && point.direction !== previous.direction;
+        const phaseChanged = previous && point.phase !== previous.phase;
+        const positionJumped =
+          previous && Math.abs(point.stroke - previous.stroke) > jumpThreshold;
+        if (segmentChanged || directionChanged || phaseChanged || positionJumped) {
+          if (currentSegment.length > 0) {
+            segments.push(currentSegment);
+          }
+          currentSegment = [];
+        }
+        currentSegment.push(point);
+        previous = point;
+      });
+      if (currentSegment.length > 0) {
+        segments.push(currentSegment);
+      }
+      return segments;
+    }
+
+    function drawPreBCurrentTrace(trace) {
+      const canvas = $("preBCurrentTrace");
+      if (!canvas) {
+        return;
+      }
+      resizeCanvasToDisplaySize(canvas);
+      const ctx = canvas.getContext("2d");
+      const width = canvas.width;
+      const height = canvas.height;
+      const points = Array.isArray(trace)
+        ? trace.map((point) => ({
+          stroke: finiteNumber(point.stroke_mm),
+          current: finiteNumber(point.abs_current_a ?? Math.abs(Number(point.current_a))),
+          segment: finiteNumber(point.segment_id),
+          direction: Number(point.direction || 0),
+          phase: Number(point.phase || 0)
+        })).filter((point) => point.stroke !== null && point.current !== null)
+        : [];
+
+      if (points.length === 0) {
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = "#667085";
+        ctx.font = "13px system-ui, -apple-system, Segoe UI, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("暂无 PreB trace", width / 2, height / 2);
+        setText("preBTraceSummary", "暂无数据");
+        return;
+      }
+
+      const xValues = points.map((point) => point.stroke);
+      const yValues = points.map((point) => Math.abs(point.current));
+      let xMin = Math.min(...xValues);
+      let xMax = Math.max(...xValues);
+      if (Math.abs(xMax - xMin) < 1e-6) {
+        xMin -= 0.5;
+        xMax += 0.5;
+      }
+      const yMax = Math.max(0.05, Math.max(...yValues) * 1.15);
+      const plot = { left: 64, right: width - 20, top: 14, bottom: height - 48 };
+      drawTraceAxes(ctx, width, height, plot, xMin, xMax, yMax);
+
+      const xFor = (stroke) => plot.left + (stroke - xMin) / (xMax - xMin) * (plot.right - plot.left);
+      const yFor = (current) => plot.bottom - Math.abs(current) / yMax * (plot.bottom - plot.top);
+      const segments = preBTraceSegments(points, xMax - xMin);
+      segments.forEach((segment) => {
+        const color = preBTraceColorFor(segment[0]?.direction || 0);
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        segment.forEach((point, index) => {
+          const x = xFor(point.stroke);
+          const y = yFor(point.current);
+          if (index === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+        ctx.stroke();
+        segment.forEach((point) => {
+          ctx.beginPath();
+          ctx.arc(xFor(point.stroke), yFor(point.current), 2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      });
+      const hasBackendSegments = points.some((point) => point.segment !== null);
+      setText("preBTraceSummary",
+        `${points.length} 点 | ${segments.length} 段 | ${hasBackendSegments ? "后端分段" : "兼容分段"} | ${fmt(xMin, 2)} ~ ${fmt(xMax, 2)} mm | max ${fmt(yMax / 1.15, 3)} A`);
+    }
+
+    function clearChildren(element) {
+      while (element.firstChild) {
+        element.removeChild(element.firstChild);
+      }
+    }
+
+    function renderConfig(config) {
+      const container = $("configGroups");
+      if (!container) {
+        return;
+      }
+      clearChildren(container);
+      setText("configCommonNote", config?.common_note || "common 目录只定义单位、Result、错误码等基础类型。");
+      if (!config?.valid || !Array.isArray(config.groups) || config.groups.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "section";
+        empty.textContent = "配置尚未加载。请确认程序启动时已经传入有效配置文件。";
+        container.appendChild(empty);
+        return;
+      }
+
+      config.groups.forEach((group) => {
+        const section = document.createElement("div");
+        section.className = "config-section";
+        const title = document.createElement("h3");
+        title.textContent = group.name || "-";
+        section.appendChild(title);
+        const table = document.createElement("div");
+        table.className = "param-table";
+        (group.items || []).forEach((item) => {
+          const row = document.createElement("div");
+          row.className = "param-row";
+          const name = document.createElement("div");
+          name.className = "name";
+          name.textContent = item.key || "-";
+          const value = document.createElement("div");
+          value.className = "value";
+          value.textContent = `${item.value ?? "-"}${item.unit ? ` ${item.unit}` : ""}`;
+          row.appendChild(name);
+          row.appendChild(value);
+          table.appendChild(row);
+        });
+        section.appendChild(table);
+        container.appendChild(section);
+      });
+    }
+
+    function requirementMet(requirement, data) {
+      const s = data.state || {};
+      const c = data.controls || {};
+      switch (requirement || "") {
+        case "":
+          return true;
+        case "disconnected":
+          return !s.connected;
+        case "connected":
+          return !!s.connected;
+        case "connected_safe":
+          return !!s.connected && !!$("safeConfirm")?.checked;
+        case "connected_not_bringup":
+          return !!c.can_run_self_check && !s.self_check_running && !adminMode;
+        case "bringup":
+          return !!s.connected && !!s.motor_bringup_active && !adminMode;
+        case "bringup_enabled":
+          return !!s.connected && !!s.motor_bringup_active && !!s.enabled && !adminMode;
+        case "enabled_selfcheck":
+          return !!c.can_home && !adminMode;
+        case "homed":
+          return !!c.can_learn_limits && !adminMode;
+        case "limits":
+          return !!c.can_health_check && !adminMode;
+        case "ready":
+          return !!c.can_clamp && isReadyState(data, s) && !adminMode;
+        case "active_stop":
+          return !!c.can_recover_active_stop && !adminMode;
+        case "admin":
+          return !!s.connected && adminMode;
+        case "admin_direction_verified":
+          return !!s.connected && adminMode && adminDirectionVerified;
+        default:
+          return false;
+      }
+    }
+
+    function explainDisabled(requirement, data) {
+      if (!requirement) {
+        return "";
+      }
+      if (requirement === "admin_direction_verified" && adminMode && !adminDirectionVerified) {
+        return "管理员高电流恢复尚未接入后端，且打开方向未确认。";
+      }
+      return requirementText[requirement] || "当前状态不可用";
+    }
+
+    function setHint(text) {
+      setText("interactionHint", text);
+    }
+
+    function updateButtonStates(data) {
+      const selfCheckButton = document.querySelector('button[data-action="selfcheck"]');
+      if (selfCheckButton) {
+        if (data?.state?.self_check_running) {
+          busyButton = selfCheckButton;
+          selfCheckButton.classList.add("busy");
+          selfCheckButton.textContent = "预自检执行中...";
+        } else if (busyButton === selfCheckButton) {
+          selfCheckButton.classList.remove("busy");
+          selfCheckButton.textContent = "预自检";
+          busyButton = null;
+        }
+      }
+      document.querySelectorAll("button[data-action], button[data-ui-action]").forEach((button) => {
+        const requirement = button.dataset.requires || "";
+        const implemented = button.dataset.unimplemented !== "true";
+        const enabled = implemented && requirementMet(requirement, data);
+        const isStopAction = button.dataset.action === "stop";
+        const lockedByBusy = button === busyButton && !isStopAction;
+        button.disabled = !enabled || lockedByBusy;
+        button.title = enabled ? "" : (implemented ? explainDisabled(requirement, data) : "后端安全策略尚未落地，当前禁用");
+      });
+    }
+
+    function render(payload) {
+      const data = viewPayload(payload);
+      lastView = data;
+      const s = data.state || {};
+      const connected = !!s.connected;
+      const enabled = !!s.enabled;
+      setText("stateText", data.status_text || "-");
+      setText("commText", connected ? "已连接" : "未连接");
+      setText("motorOutputText", enabled ? "使能" : "失能");
+      setText("workflowText", workflowSummary(s));
+      setBadge("directionBadge", "方向可信度：ConfigOnly", "warn");
+      setBadge("adminBadge", `管理员：${adminMode ? "已进入" : "未进入"}`, adminMode ? "warn" : "blocked");
+      setText("stroke", fmt(s.stroke_mm));
+      setText("angle", fmt(s.gripper_angle_rad));
+      setText("motorPos", fmt(s.motor_virtual_pos_rad ?? s.motor_pos_rad));
+      setText("wrappedPos", fmt(s.motor_wrapped_pos_rad));
+      setText("rawCounts", s.motor_raw_pos_counts ?? "-");
+      setText("runtimePmax", s.motor_runtime_limits_valid ? fmt(s.motor_runtime_pmax_rad, 3) : "-");
+      setText("runtimeVmax", s.motor_runtime_limits_valid ? fmt(s.motor_runtime_vmax_rad_s, 3) : "-");
+      setText("runtimeTmax", s.motor_runtime_limits_valid ? fmt(s.motor_runtime_tmax_nm, 3) : "-");
+      setText("bringupRuntimePmax", s.motor_runtime_limits_valid ? fmt(s.motor_runtime_pmax_rad, 3) : "-");
+      setText("bringupRuntimeVmax", s.motor_runtime_limits_valid ? fmt(s.motor_runtime_vmax_rad_s, 3) : "-");
+      setText("bringupRuntimeTmax", s.motor_runtime_limits_valid ? fmt(s.motor_runtime_tmax_nm, 3) : "-");
+      setText("bringupMotorPosition", fmt(s.motor_virtual_pos_rad ?? s.motor_pos_rad));
+      setText("bringupRuntimeWindowNote", s.motor_runtime_limits_valid
+        ? "圈数到位命令会检查目标位置是否落在 [-P_MAX, P_MAX] 内"
+        : "未读取到运行时限制，页面仅显示配置 fallback 或空值");
+      setText("nutZero", `${fmt(s.nut_encoder_zero_motor_rad)} rad / ${fmt(s.nut_encoder_zero_nut_mm)} mm`);
+      setText("motorDeltaRev", fmt(s.nut_encoder_motor_delta_rev, 4));
+      setText("mmPerRev", fmt(s.nut_encoder_mm_per_rev_estimate, 4));
+      setText("encoderFresh", s.nut_encoder_fresh ? "fresh" : "stale");
+      const rawFrameId = s.motor_raw_feedback_frame_id === null || s.motor_raw_feedback_frame_id === undefined
+        ? "-"
+        : `0x${Number(s.motor_raw_feedback_frame_id).toString(16).toUpperCase()}`;
+      const rawFrameDlc = s.motor_raw_feedback_frame_dlc ?? "-";
+      const rawFrameHex = s.motor_raw_feedback_frame_hex || "-";
+      setText("rawFrame", `${rawFrameId} dlc=${rawFrameDlc} data=${rawFrameHex}`);
+      setText("velocity", fmt(s.motor_vel_rad_s));
+      setText("current", fmt(s.motor_current_a, 4));
+      setText("torque", fmt(s.motor_torque_nm, 4));
+      setText("temp", fmt(s.temperature_c, 1));
+      setText("force", fmt(s.force_n, 2));
+      setText("profileValidity", s.structure_profile_validity_text || s.structure_profile_validity || "Unknown");
+      setText("openingBreakawayCurrent", learnedValueWithUnit(s.opening_breakaway_current_a, s.opening_breakaway_sample_count, 3, "A"));
+      setText("closingBreakawayCurrent", learnedValueWithUnit(s.closing_breakaway_current_a, s.closing_breakaway_sample_count, 3, "A"));
+      setText("openingStableSpeed", learnedValueWithUnit(s.opening_minimum_stable_speed_mm_s, s.opening_stable_speed_sample_count, 3, "mm/s"));
+      setText("closingStableSpeed", learnedValueWithUnit(s.closing_minimum_stable_speed_mm_s, s.closing_stable_speed_sample_count, 3, "mm/s"));
+      setText("staticFriction", s.static_friction_summary || "-");
+      setText("dynamicFriction", s.dynamic_friction_summary || "-");
+      setText("safeZone", s.safe_zone_summary || "-");
+      const range = sliderRangeFor(s);
+      setText("manualStrokeRange", range.enabled
+        ? `${fmt(range.min)} ~ ${fmt(range.max)} mm`
+        : "-");
+      const anomalyCount = Number(s.friction_anomaly_record_count || 0);
+      const anomalyRatio = finiteNumber(s.friction_anomaly_max_ratio);
+      setText("frictionAnomaly", anomalyCount > 0
+        ? `${anomalyCount} 个 / max ${fmt(anomalyRatio, 2)}x @ ${fmt(s.friction_anomaly_severe_center_mm)} mm`
+        : "0 个");
+      setText("selfcheckDoneText", s.self_check_running
+        ? "执行中"
+        : (s.pre_self_check_completed ? "完成" : "未完成"));
+      setText("preBMechanismText", s.pre_b_mechanism_anomaly ? "机构异常" : "未触发");
+      setText("preBTraceText", `${Number(s.pre_b_trace_sample_count || 0)} 点`);
+      setText("homedText", s.homed ? "完成" : "未完成");
+      setText("limitsDoneText", s.travel_limits_learned ? "完成" : "未完成");
+      setText("healthDoneText", s.motion_health_checked ? "完成" : "未完成");
+      drawPreBCurrentTrace(s.pre_b_current_trace || []);
+      updateStrokeSlider(s);
+      renderConfig(data.config);
+      if (data.status_text === "ActiveStop") {
+        setHint("ActiveStop 已触发：电机输出应已关闭。请先查看日志确认原因，确认无机械风险后点击“恢复 ActiveStop”，恢复后需要重新按流程确认状态。");
+      } else if (!connected) {
+        setHint("未连接：只允许连接硬件。");
+      } else if (adminMode) {
+        setHint("管理员恢复模式已进入：未实现或未通过方向确认的高权限动作保持禁用。");
+      } else if (s.motor_bringup_active) {
+        setHint(enabled ? "Bring-up 已使能：速度点动和精确圈数到位都会在命令结束后自动失能。" : "Bring-up 已进入：可 CAN 探测、读取反馈、速度短脉冲点动，或执行 1/2 圈精确位置到位来验证编码器映射。");
+      } else if (s.self_check_running) {
+        setHint("预自检正在后台执行：请等待流程结束，期间相关控制按钮保持禁用。");
+      } else {
+        setHint("已连接：建议先进入 Bring-up，完成 CAN 探测和反馈确认。");
+      }
+      if (!pauseLog) {
+        const log = $("log");
+        log.textContent = (data.logs || []).join("\n");
+        log.scrollTop = log.scrollHeight;
+      }
+      updateButtonStates(data);
+    }
+
+    function queryFor(action) {
+      const q = new URLSearchParams({ name: action });
+      if (action === "enter_bringup") {
+        q.set("confirmed", $("safeConfirm")?.checked ? "1" : "0");
+      }
+      if (action === "jog_pos" || action === "jog_neg") {
+        q.set("rad", $("jogRad")?.value || "0.2");
+        q.set("vel", $("jogVel")?.value || "0.5");
+        q.set("cur", $("jogCur")?.value || "0.5");
+        q.set("sec", $("jogSec")?.value || "0.1");
+      }
+      if (action === "turn_pos" || action === "turn_neg" || action === "turn_custom") {
+        q.set("rev", $("turnRev")?.value || "1.0");
+        q.set("vel", $("turnVel")?.value || "1.0");
+        q.set("cur", $("turnCur")?.value || "1.5");
+        q.set("timeout", $("turnTimeout")?.value || "0.0");
+      }
+      if (action === "clamp") {
+        q.set("force", $("forceN")?.value || "20");
+        q.set("speed", $("speedMm")?.value || "1.0");
+      }
+      if (action === "move_stroke") {
+        q.set("stroke", $("strokeSlider")?.value || "0");
+        q.set("speed", $("speedMm")?.value || "1.0");
+        q.set("unloaded", $("sliderUnloadedConfirm")?.checked ? "1" : "0");
+      }
+      return q.toString();
+    }
+
+    function flash(button, ok) {
+      if (!button) {
+        return;
+      }
+      const cls = ok ? "flash-ok" : "flash-error";
+      button.classList.add(cls);
+      setTimeout(() => button.classList.remove(cls), 900);
+    }
+
+    async function refresh() {
+      try {
+        render(await getJson("/api/view"));
+      } catch (error) {
+        setText("log", String(error));
+      }
+    }
+
+    async function runAction(action, button) {
+      if (button?.disabled) {
+        return;
+      }
+      const oldText = button?.textContent;
+      let ok = false;
+      try {
+        if (button) {
+          busyButton = button;
+          button.classList.add("busy");
+          if (action === "selfcheck") {
+            button.textContent = "预自检执行中...";
+          } else if (action === "stop") {
+            button.textContent = "停止请求中...";
+          } else {
+            button.textContent = "执行中...";
+          }
+          updateButtonStates(lastView || { state: {} });
+        }
+        const payload = await getJson(`/api/action?${queryFor(action)}`);
+        ok = payload.ok !== false;
+        render(payload);
+        flash(button, ok);
+        const code = payload.code ? ` (${payload.code})` : "";
+        const message = payload.message ? `：${payload.message}` : "";
+        setHint(`${oldText || action}${ok ? "：执行完成" : "：被拒绝"}${code}${message}`);
+      } catch (error) {
+        flash(button, false);
+        setText("log", String(error));
+        setHint(`${oldText || action}：执行失败`);
+      } finally {
+        if (button) {
+          if (action === "selfcheck" && ok) {
+            setTimeout(() => {
+              if (!lastView?.state?.self_check_running) {
+                button.classList.remove("busy");
+                button.textContent = oldText;
+                busyButton = null;
+                updateButtonStates(lastView || { state: {} });
+              }
+            }, 500);
+          } else {
+            button.classList.remove("busy");
+            button.textContent = oldText;
+            busyButton = null;
+            updateButtonStates(lastView || { state: {} });
+          }
+        }
+      }
+    }
+
+    async function runSliderMove(targetStroke) {
+      const slider = $("strokeSlider");
+      if (!slider) {
+        return;
+      }
+      const oldValue = targetStroke;
+      try {
+        strokeSliderDragging = true;
+        slider.disabled = true;
+        setHint(`正在移动到螺母行程 ${fmt(oldValue)} mm...`);
+        const q = new URLSearchParams({ name: "move_stroke" });
+        q.set("stroke", String(oldValue));
+        q.set("speed", $("speedMm")?.value || "1.0");
+        q.set("unloaded", $("sliderUnloadedConfirm")?.checked ? "1" : "0");
+        const payload = await getJson(`/api/action?${q.toString()}`);
+        const ok = payload.ok !== false;
+        render(payload);
+        const code = payload.code ? ` (${payload.code})` : "";
+        const message = payload.message ? `：${payload.message}` : "";
+        setHint(`螺母位置拖动${ok ? "完成" : "被拒绝"}${code}${message}`);
+      } catch (error) {
+        setHint(`螺母位置拖动执行失败：${String(error)}`);
+      } finally {
+        strokeSliderDragging = false;
+        render(lastView || { state: {} });
+      }
+    }
+
+    function runUiAction(action, button) {
+      if (button?.disabled) {
+        return;
+      }
+      if (action === "admin_enter") {
+        adminMode = true;
+        adminDirectionVerified = false;
+        setHint("已进入管理员恢复模式。当前仅解锁已落地的 UI 门禁；高电流恢复后端尚未实现。");
+        render(lastView || { state: {} });
+        flash(button, true);
+        return;
+      }
+      if (action === "admin_exit") {
+        adminMode = false;
+        adminDirectionVerified = false;
+        setHint("已退出管理员恢复模式。退出后不能直接 Ready，需要重新确认自检/回零/行程。");
+        render(lastView || { state: {} });
+        flash(button, true);
+        return;
+      }
+      if (action === "admin_probe") {
+        adminDirectionVerified = false;
+        setHint("低能量方向试探的控制器后端尚未落地，当前不发送电机命令。");
+        flash(button, false);
+        render(lastView || { state: {} });
+        return;
+      }
+      if (action === "admin_high_current") {
+        setHint("高电流恢复被禁止：需要方向确认和后端安全策略落地。");
+        flash(button, false);
+        return;
+      }
+      if (action === "admin_save_params" || action === "admin_reset_params") {
+        setHint("管理员恢复参数保存尚未接入配置写回，当前只显示不下发。");
+        flash(button, false);
+        return;
+      }
+      if (action === "copy_log") {
+        const selected = window.getSelection()?.toString();
+        const text = selected && selected.trim() ? selected : $("log")?.textContent || "";
+        navigator.clipboard?.writeText(text);
+        setHint("日志已复制到剪贴板。");
+        flash(button, true);
+        return;
+      }
+      if (action === "export_log") {
+        const blob = new Blob([$("log")?.textContent || ""], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `gripper-log-${new Date().toISOString().replaceAll(":", "-")}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setHint("日志已导出。");
+        flash(button, true);
+        return;
+      }
+      if (action === "clear_log") {
+        $("log").textContent = "";
+        pauseLog = true;
+        $("pauseLogButton").textContent = "继续滚动";
+        setHint("前端日志显示已清空并暂停刷新；后端日志未清空。");
+        flash(button, true);
+      }
+    }
+
+    document.querySelectorAll("button[data-action]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (button.dataset.turnRev && $("turnRev")) {
+          $("turnRev").value = button.dataset.turnRev;
+        }
+        runAction(button.dataset.action, button);
+      });
+    });
+    document.querySelectorAll("button[data-ui-action]").forEach((button) => {
+      button.addEventListener("click", () => runUiAction(button.dataset.uiAction, button));
+    });
+    document.querySelectorAll("[data-tab-target]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const target = button.dataset.tabTarget;
+        document.querySelectorAll("[data-tab-target]").forEach((item) => {
+          item.classList.toggle("active", item.dataset.tabTarget === target);
+        });
+        document.querySelectorAll("[data-tab-panel]").forEach((panel) => {
+          panel.classList.toggle("active", panel.dataset.tabPanel === target);
+        });
+      });
+    });
+    $("safeConfirm")?.addEventListener("change", () => render(lastView || { state: {} }));
+    $("sliderUnloadedConfirm")?.addEventListener("change", () => render(lastView || { state: {} }));
+    document.querySelectorAll("input[data-trace-color]").forEach((input) => {
+      input.addEventListener("input", (event) => {
+        const key = event.target.dataset.traceColor;
+        if (Object.prototype.hasOwnProperty.call(preBTraceColors, key) && isHexColor(event.target.value)) {
+          preBTraceColors[key] = event.target.value;
+          savePreBTraceColors();
+          drawPreBCurrentTrace(lastView?.state?.pre_b_current_trace || []);
+        }
+      });
+    });
+    $("strokeSlider")?.addEventListener("input", (event) => {
+      strokeSliderDragging = true;
+      setText("strokeSliderValue", `${fmt(event.target.value)} mm`);
+      setHint("松开滑块后将提交受限螺母行程移动；目标必须位于当前允许范围内。");
+    });
+    $("strokeSlider")?.addEventListener("change", (event) => {
+      setText("strokeSliderValue", `${fmt(event.target.value)} mm`);
+      runSliderMove(event.target.value);
+    });
+    $("pauseLogButton")?.addEventListener("click", () => {
+      pauseLog = !pauseLog;
+      $("pauseLogButton").textContent = pauseLog ? "继续滚动" : "暂停滚动";
+    });
+    loadPreBTraceColors();
+    syncPreBTraceColorInputs();
+    refresh();
+    setInterval(refresh, 800);
+  </script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "dev-zig",
+      "displayName": "Development build with bundled Zig toolchain",
+      "description": "Uses the project-local .venv CMake, Ninja, and python-zig C++ compiler.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/dev-zig",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_MAKE_PROGRAM": "${sourceDir}/.venv/Scripts/ninja.exe",
+        "CMAKE_CXX_COMPILER": "${sourceDir}/.venv/Scripts/python-zig.exe;c++"
+      },
+      "environment": {
+        "ZIG_GLOBAL_CACHE_DIR": "${sourceDir}/build/dev-zig/zig-cache"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev-zig",
+      "displayName": "Build dev-zig",
+      "configurePreset": "dev-zig"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "dev-zig",
+      "displayName": "Test dev-zig",
+      "configurePreset": "dev-zig",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

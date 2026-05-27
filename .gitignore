@@ -1,0 +1,40 @@
+# Build and generated output
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+
+# Runtime logs and learned local state
+log/
+logs/
+*.log
+gripper-log-*.txt
+pre_self_check_profile_seed.txt
+
+# Local Python/virtual environments
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# IDE/editor local state
+.vscode/
+.idea/
+.claude/
+*.user
+*.suo
+*.swp
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# Archived pre-refactor workspace is intentionally kept local unless explicitly
+# curated into references/.
+old/
+
+# Generated outputs inside archived SDK demos.
+references/04_hardware/DM_DeviceSDK/CSharp/demo/bin/
+references/04_hardware/DM_DeviceSDK/CSharp/demo/obj/
