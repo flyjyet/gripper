@@ -141,7 +141,7 @@ safety:
   # Immediate PreSelfCheck-only emergency stop. This is above the sustained
   # hard-current threshold, but stops a wedged physical end before very large
   # measured current spikes can persist.
-  self_check_feedback_emergency_current_limit_a: 3.0
+  self_check_feedback_emergency_current_limit_a: 4.0
   homing_current_limit_a: 0.5
   travel_learning_current_limit_a: 1.5
   manual_positioning_current_limit_a: 1.5

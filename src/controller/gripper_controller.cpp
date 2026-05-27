@@ -1460,13 +1460,25 @@ class DefaultGripperController final : public GripperController {
     self_check::FrictionAnomalyDetector friction_anomaly_detector{
         makeFrictionAnomalyDetectorConfig(config_)};
     const auto health_config = motionHealthConfigFromCurrentProfile();
-    const common::Mm health_move_distance{std::max(
-        config_.self_check.min_measured_distance.value,
-        std::min(config_.clamp.release_distance.value,
-                 std::max(0.0,
-                          (profile_.travel_limits.software_closed_limit.value -
-                           profile_.travel_limits.software_open_limit.value) *
-                              0.25)))};
+    const auto health_window = selectMotionHealthWindow();
+    if (!health_window.valid) {
+      (void)disableAfterMotion();
+      state_machine_.dispatch(GripperEvent::MotionHealthCheckFailed);
+      std::ostringstream message;
+      message << "motion health check has no clean internal window"
+              << " software_open_mm="
+              << profile_.travel_limits.software_open_limit.value
+              << " software_closed_mm="
+              << profile_.travel_limits.software_closed_limit.value
+              << " requested_distance_mm="
+              << motionHealthMoveDistance().value
+              << " rejected_candidates="
+              << health_window.rejected_candidate_count
+              << " anomaly_records=" << friction_anomaly_records_.size()
+              << " avoid_margin_mm=" << frictionAnomalyAvoidMargin()
+              << " avoid_ratio=" << frictionAnomalyLearningAvoidRatio();
+      return fail(common::ErrorCode::ControlUnstable, message.str());
+    }
     const OperationCurrentLimit closing_health_current =
         motionHealthCurrentLimitFromProfile(self_check::MotionDirection::Closing);
     const OperationCurrentLimit opening_health_current =
@@ -1474,23 +1486,46 @@ class DefaultGripperController final : public GripperController {
     {
       std::ostringstream message;
       message << "MotionHealthCheck | start"
-              << " health_move_distance_mm=" << health_move_distance.value
+              << " anchor_mm=" << health_window.anchor.value
+              << " health_move_distance_mm="
+              << health_window.move_distance.value
+              << " current_mm=" << current_nut_stroke_.value
+              << " software_open_mm="
+              << profile_.travel_limits.software_open_limit.value
+              << " software_closed_mm="
+              << profile_.travel_limits.software_closed_limit.value
+              << " max_velocity_error_limit_mm_s="
+              << health_config.max_velocity_tracking_error.value
+              << " current_ripple_limit_a="
+              << health_config.max_current_ripple.value
+              << " torque_ripple_limit_nm="
+              << health_config.max_torque_ripple.value
+              << " temperature_limit_deg_c="
+              << health_config.max_temperature.value
               << " closing_current_limit_a="
               << closing_health_current.limit.value
               << " closing_current_source=" << closing_health_current.source
               << " opening_current_limit_a="
               << opening_health_current.limit.value
-              << " opening_current_source=" << opening_health_current.source;
+              << " opening_current_source=" << opening_health_current.source
+              << " rejected_window_candidates="
+              << health_window.rejected_candidate_count;
       reportProgress(message.str());
+    }
+    const auto anchor_motion = moveToMotionHealthAnchor(
+        health_window.anchor, opening_health_current, closing_health_current);
+    if (anchor_motion.isError()) {
+      (void)disableAfterMotion();
+      state_machine_.dispatch(GripperEvent::MotionHealthCheckFailed);
+      return fail(anchor_motion);
     }
     for (const auto speed : config_.self_check.motion_health_check_speeds) {
       const double abs_speed = std::abs(speed.value);
       if (abs_speed <= 0.0) {
         continue;
       }
-      const common::Mm close_target{std::min(
-          current_nut_stroke_.value + health_move_distance.value,
-          profile_.travel_limits.software_closed_limit.value)};
+      const common::Mm close_target{
+          health_window.anchor.value + health_window.move_distance.value};
       const auto close_motion = runMotionUntil(MotionWaitOptions{
           close_target,
           common::MmPerS{abs_speed},
@@ -1512,12 +1547,12 @@ class DefaultGripperController final : public GripperController {
         state_machine_.dispatch(GripperEvent::MotionHealthCheckFailed);
         return fail(close_motion.result);
       }
-      samples.push_back(makeMotionHealthSample(close_motion,
-                                               common::MmPerS{abs_speed}));
+      const auto close_sample =
+          makeMotionHealthSample(close_motion, common::MmPerS{abs_speed});
+      samples.push_back(close_sample);
+      reportMotionHealthSample(close_sample, close_motion, health_config);
 
-      const common::Mm open_target{std::max(
-          current_nut_stroke_.value - health_move_distance.value,
-          profile_.travel_limits.software_open_limit.value)};
+      const common::Mm open_target = health_window.anchor;
       const auto open_motion = runMotionUntil(MotionWaitOptions{
           open_target,
           common::MmPerS{-abs_speed},
@@ -1539,8 +1574,10 @@ class DefaultGripperController final : public GripperController {
         state_machine_.dispatch(GripperEvent::MotionHealthCheckFailed);
         return fail(open_motion.result);
       }
-      samples.push_back(makeMotionHealthSample(open_motion,
-                                               common::MmPerS{-abs_speed}));
+      const auto open_sample =
+          makeMotionHealthSample(open_motion, common::MmPerS{-abs_speed});
+      samples.push_back(open_sample);
+      reportMotionHealthSample(open_sample, open_motion, health_config);
     }
 
     (void)disableAfterMotion();
@@ -1551,6 +1588,8 @@ class DefaultGripperController final : public GripperController {
     profile_.motion_health = health.profile;
     if (health.result.isError()) {
       state_machine_.dispatch(GripperEvent::MotionHealthCheckFailed);
+      reportProgress(std::string{"MotionHealthCheck | failed "} +
+                     health.result.message());
       return fail(health.result);
     }
     capFirstPassProjectionQuality(&profile_);
@@ -1562,11 +1601,23 @@ class DefaultGripperController final : public GripperController {
     std::ostringstream message;
     message << "MotionHealthCheck | completed"
             << " sample_count=" << samples.size()
+            << " valid_samples=" << health.profile.valid_sample_count
+            << " rejected_samples=" << health.profile.rejected_sample_count
+            << " anchor_mm=" << health_window.anchor.value
+            << " health_move_distance_mm="
+            << health_window.move_distance.value
+            << " max_velocity_error_mm_s="
+            << health.profile.max_velocity_tracking_error.value
+            << " max_current_ripple_a="
+            << health.profile.max_current_ripple.value
+            << " max_torque_ripple_nm="
+            << health.profile.max_torque_ripple.value
             << " closing_current_limit_a=" << closing_health_current.limit.value
             << " closing_current_source=" << closing_health_current.source
             << " opening_current_limit_a=" << opening_health_current.limit.value
             << " opening_current_source=" << opening_health_current.source
             << " anomaly_candidates=" << friction_anomaly_records_.size();
+    reportProgress(message.str());
     return finish(common::Result{common::ErrorCode::Ok, message.str()});
   }
 
@@ -1578,6 +1629,29 @@ class DefaultGripperController final : public GripperController {
       output.software_open_limit = profile_.travel_limits.software_open_limit;
       output.software_closed_limit = profile_.travel_limits.software_closed_limit;
     }
+    output.max_velocity_tracking_error = common::MmPerS{std::max(
+        std::abs(output.max_velocity_tracking_error.value),
+        std::abs(config_.self_check.stable_speed_margin.value) * 1.5)};
+    const double learned_current = std::max(
+        learnedMotionCurrent(self_check::MotionDirection::Opening)
+            .value_or(common::A{})
+            .value,
+        learnedMotionCurrent(self_check::MotionDirection::Closing)
+            .value_or(common::A{})
+            .value);
+    output.max_current_ripple = common::A{std::max(
+        {std::abs(output.max_current_ripple.value),
+         std::abs(profile_.noise_floor.motor_current_noise.value) * 6.0,
+         std::abs(config_.self_check.fallback_motor_current_noise.value) * 6.0,
+         std::abs(config_.safety.contact_current_rise_threshold.value),
+         learned_current * 0.5})};
+    const double learned_torque = learnedMotionTorqueEnvelope();
+    output.max_torque_ripple = common::Nm{std::max(
+        {std::abs(output.max_torque_ripple.value),
+         std::abs(profile_.noise_floor.motor_torque_noise.value) * 6.0,
+         std::abs(config_.self_check.fallback_motor_torque_noise.value) * 6.0,
+         std::abs(config_.safety.contact_current_rise_threshold.value) * 0.5,
+         learned_torque * 0.5})};
     return output;
   }
 
@@ -1601,6 +1675,67 @@ class DefaultGripperController final : public GripperController {
     const common::MmPerS nut_speed = resolveClampForceNutSpeed(command);
     const common::Mm target_stroke =
         profile_.travel_limits.software_closed_limit;
+    self_check::FrictionAnomalyDetector friction_anomaly_detector{
+        makeFrictionAnomalyDetectorConfig(config_)};
+    const common::Mm approach_target = clampForceApproachTarget(target_stroke);
+    common::Mm approach_measured_distance{};
+    bool approach_ran = false;
+    if (approach_target.value > current_nut_stroke_.value +
+                                    endpointProgressThreshold().value) {
+      approach_ran = true;
+      const common::MmPerS approach_speed = clampApproachNutSpeed(nut_speed);
+      const auto approach_motion = runMotionUntil(MotionWaitOptions{
+          approach_target,
+          approach_speed,
+          force.motor_current,
+          {},
+          true,
+          true,
+          true,
+          {},
+          false,
+          {},
+          {},
+          false,
+          true,
+          config_.safety.contact_detection_time,
+          &friction_anomaly_detector,
+          true});
+      approach_measured_distance = approach_motion.measured_distance;
+      if (approach_motion.result.isError()) {
+        friction_anomaly_detector.finish();
+        mergeFrictionAnomalyRecords(friction_anomaly_detector.records());
+        (void)disableAfterMotion();
+        state_machine_.dispatch(GripperEvent::ClampFailed);
+        return fail(approach_motion.result);
+      }
+      if (approach_motion.contact_detected ||
+          approach_motion.force_current_reached) {
+        friction_anomaly_detector.finish();
+        mergeFrictionAnomalyRecords(friction_anomaly_detector.records());
+        estimated_clamp_force_ =
+            approach_motion.force_current_reached ? force.target_force
+                                                  : common::N{};
+        contact_detected_ = true;
+        state_machine_.dispatch(GripperEvent::ClampCompleted);
+        state_machine_.dispatch(GripperEvent::DisableCompleted);
+        updateSnapshotFlags();
+        std::ostringstream message;
+        message << "clamp force completed during approach"
+                << " target_force_n=" << force.target_force.value
+                << " motor_current_target_a=" << force.motor_current.value
+                << " approach_target_mm=" << approach_target.value
+                << " measured_approach_mm="
+                << approach_motion.measured_distance.value
+                << " contact=" << (approach_motion.contact_detected ? 1 : 0)
+                << " force_proxy="
+                << (approach_motion.force_current_reached ? 1 : 0)
+                << " anomaly_suppressed="
+                << approach_motion.anomaly_suppressed_contact_count;
+        return finish(common::Result{common::ErrorCode::Ok, message.str()});
+      }
+    }
+
     const auto motion = runMotionUntil(MotionWaitOptions{
         target_stroke,
         nut_speed,
@@ -1615,13 +1750,19 @@ class DefaultGripperController final : public GripperController {
         {},
         false,
         true,
-        config_.safety.contact_detection_time});
+        config_.safety.contact_detection_time,
+        &friction_anomaly_detector,
+        true});
+    friction_anomaly_detector.finish();
+    mergeFrictionAnomalyRecords(friction_anomaly_detector.records());
     if (motion.result.isError()) {
+      (void)disableAfterMotion();
       state_machine_.dispatch(GripperEvent::ClampFailed);
       return fail(motion.result);
     }
 
     if (!motion.contact_detected && !motion.force_current_reached) {
+      (void)disableAfterMotion();
       state_machine_.dispatch(GripperEvent::ClampFailed);
       return fail(common::ErrorCode::SafetyContactDetected,
                   "clamp reached travel target without contact or force proxy");
@@ -1637,13 +1778,18 @@ class DefaultGripperController final : public GripperController {
     std::ostringstream message;
     message << "clamp force completed target_force_n=" << force.target_force.value
             << " motor_current_target_a=" << force.motor_current.value
+            << " approach_ran=" << (approach_ran ? 1 : 0)
+            << " measured_approach_mm=" << approach_measured_distance.value
             << " contact=" << (motion.contact_detected ? 1 : 0)
             << " force_proxy=" << (motion.force_current_reached ? 1 : 0)
-            << " target_reached=" << (motion.target_reached ? 1 : 0);
+            << " target_reached=" << (motion.target_reached ? 1 : 0)
+            << " anomaly_suppressed="
+            << motion.anomaly_suppressed_contact_count;
     return finish(common::Result{common::ErrorCode::Ok, message.str()});
   }
 
   common::Result clampBySpeed(const ClampSpeedCommand& command) override {
+    clearOperationCancel();
     const auto ready = requireReadyForWork();
     if (ready.isError()) {
       return ready;
@@ -1663,6 +1809,8 @@ class DefaultGripperController final : public GripperController {
     const common::Mm target_stroke =
         profile_.travel_limits.software_closed_limit;
 
+    self_check::FrictionAnomalyDetector friction_anomaly_detector{
+        makeFrictionAnomalyDetectorConfig(config_)};
     const auto motion = runMotionUntil(MotionWaitOptions{
         target_stroke,
         nut_speed,
@@ -1677,14 +1825,20 @@ class DefaultGripperController final : public GripperController {
         {},
         false,
         true,
-        config_.safety.contact_detection_time});
+        config_.safety.contact_detection_time,
+        &friction_anomaly_detector,
+        true});
+    friction_anomaly_detector.finish();
+    mergeFrictionAnomalyRecords(friction_anomaly_detector.records());
     if (motion.result.isError()) {
+      (void)disableAfterMotion();
       state_machine_.dispatch(GripperEvent::ClampFailed);
       return fail(motion.result);
     }
 
     contact_detected_ = motion.contact_detected;
     if (!contact_detected_ && !motion.target_reached) {
+      (void)disableAfterMotion();
       state_machine_.dispatch(GripperEvent::ClampFailed);
       return fail(common::ErrorCode::SafetyContactDetected,
                   "constant-speed clamp ended without contact feedback");
@@ -1695,7 +1849,9 @@ class DefaultGripperController final : public GripperController {
     std::ostringstream message;
     message << "constant-speed clamp completed contact="
             << (motion.contact_detected ? 1 : 0)
-            << " target_reached=" << (motion.target_reached ? 1 : 0);
+            << " target_reached=" << (motion.target_reached ? 1 : 0)
+            << " anomaly_suppressed="
+            << motion.anomaly_suppressed_contact_count;
     return finish(common::Result{common::ErrorCode::Ok, message.str()});
   }
 
@@ -1749,6 +1905,7 @@ class DefaultGripperController final : public GripperController {
         false,
         {}});
     if (motion.result.isError()) {
+      (void)disableAfterMotion();
       state_machine_.dispatch(GripperEvent::ReleaseFailed);
       return fail(motion.result);
     }
@@ -1945,6 +2102,7 @@ class DefaultGripperController final : public GripperController {
     bool require_no_progress_for_contact_stop{false};
     common::S no_progress_confirm_time{};
     self_check::FrictionAnomalyDetector* friction_anomaly_detector{nullptr};
+    bool suppress_contact_inside_friction_anomaly{false};
   };
 
   struct MotionWaitResult {
@@ -1969,6 +2127,8 @@ class DefaultGripperController final : public GripperController {
     bool contact_detected{false};
     bool jam_detected{false};
     bool force_current_reached{false};
+    bool contact_suppressed_by_anomaly{false};
+    std::uint32_t anomaly_suppressed_contact_count{0};
   };
 
   struct ManualPositioningResult {
@@ -2102,6 +2262,13 @@ class DefaultGripperController final : public GripperController {
   struct PreBLearningAnchorCandidate {
     common::Mm anchor{};
     std::uint32_t region_bucket{0};
+  };
+
+  struct MotionHealthWindow {
+    common::Mm anchor{};
+    common::Mm move_distance{};
+    bool valid{false};
+    std::uint32_t rejected_candidate_count{0};
   };
 
   struct OperationCurrentLimit {
@@ -2626,6 +2793,24 @@ class DefaultGripperController final : public GripperController {
         std::min(mapped_nut_speed.value, nut_speed_limit.value)};
   }
 
+  [[nodiscard]] common::Mm clampForceApproachTarget(
+      common::Mm final_target_stroke) const {
+    const double approach_distance =
+        std::max(0.0, config_.clamp.approach_distance.value);
+    const double open_limit = profile_.travel_limits.software_open_limit.value;
+    const double target =
+        std::max(open_limit, final_target_stroke.value - approach_distance);
+    return common::Mm{std::min(target, final_target_stroke.value)};
+  }
+
+  [[nodiscard]] common::MmPerS clampApproachNutSpeed(
+      common::MmPerS final_nut_speed) const {
+    const double configured = std::abs(config_.clamp.approach_nut_speed.value);
+    const double fallback = std::abs(final_nut_speed.value);
+    const double requested = configured > 0.0 ? configured : fallback;
+    return common::MmPerS{std::min(requested, fallback)};
+  }
+
   [[nodiscard]] common::S motionTimeoutFor(common::Mm start_stroke,
                                            common::Mm target_stroke,
                                            common::MmPerS nut_speed,
@@ -2805,6 +2990,26 @@ class DefaultGripperController final : public GripperController {
     return common::A{current};
   }
 
+  [[nodiscard]] double learnedMotionTorqueEnvelopeFor(
+      self_check::MotionDirection direction) const {
+    const auto& profile = directionalProfile(direction);
+    double torque = 0.0;
+    if (profile.dynamic_friction_sample_count > 0U) {
+      torque =
+          std::max(torque, std::abs(profile.dynamic_friction_torque_max.value));
+    }
+    if (profile.static_friction_sample_count > 0U) {
+      torque = std::max(torque, std::abs(profile.static_friction_torque.value));
+    }
+    return torque;
+  }
+
+  [[nodiscard]] double learnedMotionTorqueEnvelope() const {
+    return std::max(
+        learnedMotionTorqueEnvelopeFor(self_check::MotionDirection::Opening),
+        learnedMotionTorqueEnvelopeFor(self_check::MotionDirection::Closing));
+  }
+
   [[nodiscard]] common::A contactBaselineFor(
       common::MmPerS commanded_nut_speed) const {
     const auto direction = directionFromSignedNutSpeed(commanded_nut_speed);
@@ -2879,6 +3084,192 @@ class DefaultGripperController final : public GripperController {
                                  "travel_learning_config"};
   }
 
+  [[nodiscard]] common::Mm motionHealthMoveDistance() const {
+    const double travel = std::max(
+        0.0, profile_.travel_limits.software_closed_limit.value -
+                 profile_.travel_limits.software_open_limit.value);
+    const double configured_release =
+        std::abs(config_.clamp.release_distance.value);
+    const double preferred =
+        std::max({config_.self_check.min_measured_distance.value,
+                  config_.self_check.max_probe_window.value,
+                  configured_release});
+    const double capped = travel > 0.0 ? std::min(preferred, travel * 0.25)
+                                       : preferred;
+    return common::Mm{std::max(config_.self_check.min_measured_distance.value,
+                               capped)};
+  }
+
+  [[nodiscard]] common::Mm motionHealthWindowMargin(
+      common::Mm move_distance) const {
+    return common::Mm{std::max(
+        {config_.self_check.max_distance_error.value,
+         config_.self_check.min_measured_distance.value * 0.5,
+         config_.self_check.fallback_nut_stroke_noise.value * 3.0,
+         frictionAnomalyAvoidMargin(), move_distance.value * 0.25})};
+  }
+
+  [[nodiscard]] bool motionHealthSegmentOverlapsKnownAnomaly(
+      common::Mm start_position, common::Mm end_position,
+      self_check::MotionDirection direction) const {
+    if (friction_anomaly_records_.empty()) {
+      return false;
+    }
+    const double margin = frictionAnomalyAvoidMargin();
+    const double avoid_ratio = frictionAnomalyLearningAvoidRatio();
+    for (const auto& record : friction_anomaly_records_) {
+      if (record.current_excess_ratio.value < avoid_ratio ||
+          !frictionAnomalyDirectionMatches(record, direction)) {
+        continue;
+      }
+      if (intervalOverlaps(record.start_position.value, record.end_position.value,
+                           start_position.value, end_position.value, margin)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  [[nodiscard]] bool motionHealthWindowIsClean(common::Mm anchor,
+                                               common::Mm move_distance) const {
+    const common::Mm close_target{anchor.value + move_distance.value};
+    return !motionHealthSegmentOverlapsKnownAnomaly(
+               anchor, close_target, self_check::MotionDirection::Closing) &&
+           !motionHealthSegmentOverlapsKnownAnomaly(
+               close_target, anchor, self_check::MotionDirection::Opening);
+  }
+
+  [[nodiscard]] MotionHealthWindow selectMotionHealthWindow() const {
+    MotionHealthWindow output{};
+    output.move_distance = motionHealthMoveDistance();
+    const double open = profile_.travel_limits.software_open_limit.value;
+    const double closed = profile_.travel_limits.software_closed_limit.value;
+    const double travel = closed - open;
+    if (travel <= output.move_distance.value) {
+      return output;
+    }
+
+    common::Mm margin = motionHealthWindowMargin(output.move_distance);
+    double min_anchor = open + margin.value;
+    double max_anchor = closed - output.move_distance.value - margin.value;
+    if (max_anchor < min_anchor) {
+      margin = common::Mm{std::max(
+          config_.self_check.max_distance_error.value,
+          config_.self_check.fallback_nut_stroke_noise.value * 3.0)};
+      min_anchor = open + margin.value;
+      max_anchor = closed - output.move_distance.value - margin.value;
+    }
+    if (max_anchor < min_anchor) {
+      min_anchor = open;
+      max_anchor = closed - output.move_distance.value;
+    }
+    if (max_anchor < min_anchor) {
+      return output;
+    }
+
+    const common::Mm preferred{std::clamp(
+        current_nut_stroke_.value, min_anchor, max_anchor)};
+    std::vector<common::Mm> candidates{preferred};
+    const double span = max_anchor - min_anchor;
+    constexpr std::uint32_t kGridCount = 12U;
+    for (std::uint32_t index = 0; index <= kGridCount; ++index) {
+      const double ratio =
+          static_cast<double>(index) / static_cast<double>(kGridCount);
+      candidates.push_back(common::Mm{min_anchor + span * ratio});
+    }
+    candidates.push_back(common::Mm{min_anchor + span * 0.5});
+    std::sort(candidates.begin(), candidates.end(),
+              [preferred](common::Mm lhs, common::Mm rhs) {
+                return std::abs(lhs.value - preferred.value) <
+                       std::abs(rhs.value - preferred.value);
+              });
+
+    for (const auto candidate : candidates) {
+      if (candidate.value < min_anchor || candidate.value > max_anchor) {
+        ++output.rejected_candidate_count;
+        continue;
+      }
+      if (!motionHealthWindowIsClean(candidate, output.move_distance)) {
+        ++output.rejected_candidate_count;
+        continue;
+      }
+      output.anchor = candidate;
+      output.valid = true;
+      return output;
+    }
+    return output;
+  }
+
+  [[nodiscard]] common::Result moveToMotionHealthAnchor(
+      common::Mm anchor, const OperationCurrentLimit& opening_health_current,
+      const OperationCurrentLimit& closing_health_current) {
+    const double error = anchor.value - current_nut_stroke_.value;
+    if (std::abs(error) <= config_.self_check.max_distance_error.value) {
+      return common::Ok();
+    }
+    const auto direction = error < 0.0 ? self_check::MotionDirection::Opening
+                                      : self_check::MotionDirection::Closing;
+    const auto& current_limit =
+        direction == self_check::MotionDirection::Opening ? opening_health_current
+                                                          : closing_health_current;
+    const common::MmPerS speed{
+        (direction == self_check::MotionDirection::Opening ? -1.0 : 1.0) *
+        std::max(std::abs(config_.self_check.travel_learning_speed.value),
+                 std::abs(config_.self_check.min_speed_scan_start.value))};
+    std::ostringstream start_message;
+    start_message << "MotionHealthCheck | anchor_reposition start"
+                  << " direction=" << directionName(direction)
+                  << " current_mm=" << current_nut_stroke_.value
+                  << " target_mm=" << anchor.value
+                  << " current_limit_a=" << current_limit.limit.value
+                  << " current_source=" << current_limit.source;
+    reportProgress(start_message.str());
+    const auto motion = runMotionUntil(MotionWaitOptions{
+        anchor,
+        speed,
+        current_limit.limit,
+        {},
+        true,
+        false,
+        false,
+        {},
+        true,
+        profile_.travel_limits.software_open_limit,
+        profile_.travel_limits.software_closed_limit});
+    (void)disableAfterMotion();
+    std::ostringstream result_message;
+    result_message << "MotionHealthCheck | anchor_reposition result"
+                   << " code=" << common::toString(motion.result.code())
+                   << " start_mm=" << motion.start_stroke.value
+                   << " end_mm=" << motion.end_stroke.value
+                   << " target_mm=" << anchor.value
+                   << " measured_mm=" << motion.measured_distance.value
+                   << " target_reached="
+                   << (motion.target_reached ? "true" : "false")
+                   << " jam_detected="
+                   << (motion.jam_detected ? "true" : "false")
+                   << " contact_detected="
+                   << (motion.contact_detected ? "true" : "false");
+    reportProgress(result_message.str());
+    if (motion.result.isError()) {
+      return motion.result;
+    }
+    const double final_error =
+        std::abs(current_nut_stroke_.value - anchor.value);
+    if (final_error > config_.self_check.max_distance_error.value) {
+      std::ostringstream message;
+      message << "motion health anchor reposition did not reach target"
+              << " target_mm=" << anchor.value
+              << " current_mm=" << current_nut_stroke_.value
+              << " error_mm=" << final_error
+              << " allowed_error_mm="
+              << config_.self_check.max_distance_error.value;
+      return common::Result::error(common::ErrorCode::ControlUnstable,
+                                   message.str());
+    }
+    return common::Ok();
+  }
+
   [[nodiscard]] MotionWaitResult completeEndpointMotion(
       MotionWaitResult output, const char* reason, double confirm_duration_s,
       common::A trigger_current, common::MmPerS trigger_speed,
@@ -2896,7 +3287,7 @@ class DefaultGripperController final : public GripperController {
     output.result = common::Ok();
 
     std::ostringstream message;
-    message << "HomingOpenStop | opening endpoint detected"
+    message << "EndpointMotion | endpoint feedback detected"
             << " reason=" << (reason != nullptr ? reason : "unknown")
             << " confirm_s=" << confirm_duration_s
             << " trigger_stroke_mm=" << trigger_stroke.value
@@ -3577,9 +3968,10 @@ class DefaultGripperController final : public GripperController {
 
       output.end_stroke = current_nut_stroke_;
       output.measured_nut_speed = measuredNutSpeed();
+      const auto motion_direction = directionFromSignedNutSpeed(options.nut_speed);
       feedPreBFeedbackRecorders(options.friction_anomaly_detector,
-                                directionFromSignedNutSpeed(options.nut_speed),
-                                output.measured_nut_speed, false);
+                                motion_direction, output.measured_nut_speed,
+                                false);
       output.measured_distance = common::Mm{
           std::abs(output.end_stroke.value - output.start_stroke.value)};
       observeMotionWaitFeedback(&output, options.nut_speed);
@@ -3590,10 +3982,12 @@ class DefaultGripperController final : public GripperController {
           std::abs(last_feedback_.current.value) >=
               options.force_current_target.value -
                   config_.self_check.max_current_ripple.value;
-      if (options.require_no_progress_for_contact_stop &&
+      const bool contact_progress_made =
+          options.require_no_progress_for_contact_stop &&
           madeProgressInCommandDirection(contact_progress_reference,
                                          options.nut_speed,
-                                         endpoint_progress_threshold)) {
+                                         endpoint_progress_threshold);
+      if (contact_progress_made) {
         contact_progress_reference = current_nut_stroke_;
         contact_no_progress_timer_running = false;
       }
@@ -3636,6 +4030,20 @@ class DefaultGripperController final : public GripperController {
           output.jam_detected ||
           (options.stop_on_contact && output.contact_detected) ||
           output.force_current_reached;
+      const bool inside_friction_anomaly =
+          options.suppress_contact_inside_friction_anomaly &&
+          strokeOverlapsKnownFrictionAnomaly(current_nut_stroke_,
+                                             motion_direction);
+      if (inside_friction_anomaly && contact_or_jam_detected &&
+          contact_progress_made && !feedbackCurrentExceedsHardLimit()) {
+        output.contact_suppressed_by_anomaly = true;
+        ++output.anomaly_suppressed_contact_count;
+        output.contact_detected = false;
+        output.jam_detected = false;
+        output.force_current_reached = false;
+        contact_no_progress_timer_running = false;
+        continue;
+      }
       bool contact_stop_confirmed = contact_or_jam_detected;
       if (options.require_no_progress_for_contact_stop &&
           contact_or_jam_detected) {
@@ -3698,9 +4106,17 @@ class DefaultGripperController final : public GripperController {
       }
       const bool force_current_stop_confirmed =
           output.force_current_reached && contact_stop_confirmed;
+      // A known friction window can produce a short current peak exactly at the
+      // software target. Treat it as a force/contact result only after the
+      // no-progress timer has confirmed that motion really stopped there.
+      const bool anomaly_target_waiting_for_no_progress =
+          inside_friction_anomaly &&
+          options.require_no_progress_for_contact_stop &&
+          output.force_current_reached && !contact_stop_confirmed;
       const bool force_current_at_target =
           output.force_current_reached && output.target_reached &&
-          options.allow_contact_success;
+          options.allow_contact_success &&
+          !anomaly_target_waiting_for_no_progress;
       if (force_current_stop_confirmed ||
           force_current_at_target ||
           (output.target_reached && !options.allow_contact_success)) {
@@ -3722,7 +4138,8 @@ class DefaultGripperController final : public GripperController {
         output.result = common::Ok();
         return output;
       }
-      if (output.target_reached && options.allow_contact_success) {
+      if (output.target_reached && options.allow_contact_success &&
+          !anomaly_target_waiting_for_no_progress) {
         const auto settle_result = stopAndWaitForSettledFeedback();
         if (settle_result.result.isError()) {
           output.result = settle_result.result;
@@ -4449,6 +4866,42 @@ class DefaultGripperController final : public GripperController {
                      << " width_mm=" << record.width.value;
       reportProgress(record_message.str());
     }
+  }
+
+  void reportMotionHealthSample(
+      const self_check::MotionHealthSample& sample,
+      const MotionWaitResult& motion,
+      const self_check::MotionHealthCheckerConfig& health_config) {
+    std::ostringstream message;
+    message << "MotionHealthCheck | sample"
+            << " direction=" << directionName(sample.direction)
+            << " target_speed_mm_s=" << sample.target_nut_speed.value
+            << " start_mm=" << sample.start_nut_stroke.value
+            << " end_mm=" << sample.end_nut_stroke.value
+            << " measured_mm=" << motion.measured_distance.value
+            << " measured_speed_mm_s=" << motion.measured_nut_speed.value
+            << " sample_count=" << motion.sample_count
+            << " velocity_error_mm_s="
+            << sample.max_velocity_tracking_error.value
+            << " velocity_limit_mm_s="
+            << health_config.max_velocity_tracking_error.value
+            << " current_ripple_a=" << sample.current_ripple.value
+            << " current_limit_a=" << health_config.max_current_ripple.value
+            << " torque_ripple_nm=" << sample.torque_ripple.value
+            << " torque_limit_nm=" << health_config.max_torque_ripple.value
+            << " max_temperature_deg_c=" << sample.max_temperature.value
+            << " temperature_limit_deg_c="
+            << health_config.max_temperature.value
+            << " within_limits="
+            << (sample.within_software_limits ? "true" : "false")
+            << " monotonic="
+            << (sample.position_monotonic ? "true" : "false")
+            << " jam_detected=" << (sample.jam_detected ? "true" : "false")
+            << " target_reached="
+            << (motion.target_reached ? "true" : "false")
+            << " contact_detected="
+            << (motion.contact_detected ? "true" : "false");
+    reportProgress(message.str());
   }
 
   void reportBreakawayAccepted(
@@ -6292,6 +6745,34 @@ class DefaultGripperController final : public GripperController {
       }
       if (intervalOverlaps(record.start_position.value, record.end_position.value,
                            start_position.value, end_position.value, margin)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  [[nodiscard]] bool frictionAnomalyDirectionMatches(
+      const self_check::FrictionAnomalyRecord& record,
+      self_check::MotionDirection direction) const noexcept {
+    return direction == self_check::MotionDirection::Unknown ||
+           record.direction == self_check::MotionDirection::Unknown ||
+           record.direction == direction;
+  }
+
+  [[nodiscard]] bool strokeOverlapsKnownFrictionAnomaly(
+      common::Mm stroke, self_check::MotionDirection direction) const {
+    if (friction_anomaly_records_.empty()) {
+      return false;
+    }
+    const double margin = frictionAnomalyAvoidMargin();
+    const double avoid_ratio = frictionAnomalyLearningAvoidRatio();
+    for (const auto& record : friction_anomaly_records_) {
+      if (record.current_excess_ratio.value < avoid_ratio ||
+          !frictionAnomalyDirectionMatches(record, direction)) {
+        continue;
+      }
+      if (intervalOverlaps(record.start_position.value, record.end_position.value,
+                           stroke.value, stroke.value, margin)) {
         return true;
       }
     }

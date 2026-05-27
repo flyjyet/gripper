@@ -1,6 +1,7 @@
 #include "controller/self_check/motion_health_checker.hpp"
 
 #include <algorithm>
+#include <sstream>
 
 #include "common/error_code.hpp"
 
@@ -55,23 +56,44 @@ MotionHealthCheckResult MotionHealthChecker::check(
         unsafe_sample_seen ? MotionHealthStatus::Unsafe : MotionHealthStatus::Unknown;
     output.profile.quality = IdentificationQuality::ConservativeDefault;
     output.profile.score = common::Ratio{0.0};
+    std::ostringstream message;
+    message << "Insufficient motion health samples"
+            << " valid=" << output.profile.valid_sample_count
+            << " rejected=" << output.profile.rejected_sample_count
+            << " required=" << config_.min_valid_samples;
     output.result = common::Result::error(
-        common::ErrorCode::SelfCheckFailed,
-        "Insufficient motion health samples");
+        common::ErrorCode::SelfCheckFailed, message.str());
   } else if (unsafe_sample_seen) {
     output.profile.status = MotionHealthStatus::Unsafe;
     output.profile.quality = IdentificationQuality::Verified;
     output.profile.score = common::Ratio{0.0};
+    std::ostringstream message;
+    message << "Unsafe motion health sample detected"
+            << " valid=" << output.profile.valid_sample_count
+            << " rejected=" << output.profile.rejected_sample_count;
     output.result = common::Result::error(
-        common::ErrorCode::SelfCheckUnsafeMotion,
-        "Unsafe motion health sample detected");
+        common::ErrorCode::SelfCheckUnsafeMotion, message.str());
   } else if (degraded) {
     output.profile.status = MotionHealthStatus::Degraded;
     output.profile.quality = IdentificationQuality::Verified;
     output.profile.score = common::Ratio{0.5};
+    std::ostringstream message;
+    message << "Motion health thresholds exceeded"
+            << " max_velocity_error_mm_s="
+            << output.profile.max_velocity_tracking_error.value
+            << " velocity_limit_mm_s="
+            << config_.max_velocity_tracking_error.value
+            << " max_current_ripple_a="
+            << output.profile.max_current_ripple.value
+            << " current_ripple_limit_a=" << config_.max_current_ripple.value
+            << " max_torque_ripple_nm="
+            << output.profile.max_torque_ripple.value
+            << " torque_ripple_limit_nm=" << config_.max_torque_ripple.value
+            << " max_temperature_deg_c="
+            << output.profile.max_temperature.value
+            << " temperature_limit_deg_c=" << config_.max_temperature.value;
     output.result = common::Result::error(
-        common::ErrorCode::ControlUnstable,
-        "Motion health thresholds exceeded");
+        common::ErrorCode::ControlUnstable, message.str());
   } else {
     output.profile.status = MotionHealthStatus::Healthy;
     output.profile.quality = IdentificationQuality::Verified;

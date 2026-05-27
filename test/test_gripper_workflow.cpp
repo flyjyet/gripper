@@ -863,6 +863,9 @@ static int test_full_simulated_workflow_reaches_ready_clamps_and_releases() {
   auto gripper = makeController();
   TEST_ASSERT(configureAndConnect(gripper.get()) == 0,
               "configure/connect helper must succeed");
+  std::vector<std::string> progress;
+  gripper->setProgressCallback(
+      [&](std::string message) { progress.push_back(std::move(message)); });
 
   TEST_ASSERT(gripper->enable().isOk(), "enable must succeed");
   TEST_ASSERT(gripper->runPreSelfCheck().isOk(),
@@ -888,13 +891,44 @@ static int test_full_simulated_workflow_reaches_ready_clamps_and_releases() {
   TEST_ASSERT(state.motion_health_checked, "health flag must be set");
   TEST_ASSERT(!state.enabled,
               "health check should leave motor output disabled");
+  bool saw_health_anchor = false;
+  bool saw_health_sample = false;
+  bool saw_health_thresholds = false;
+  for (const auto& line : progress) {
+    if (textContains(line, "MotionHealthCheck | start") &&
+        textContains(line, "anchor_mm=") &&
+        textContains(line, "health_move_distance_mm=")) {
+      saw_health_anchor = true;
+    }
+    if (textContains(line, "MotionHealthCheck | sample") &&
+        textContains(line, "current_ripple_a=") &&
+        textContains(line, "velocity_limit_mm_s=")) {
+      saw_health_sample = true;
+    }
+    if (textContains(line, "MotionHealthCheck | completed") &&
+        textContains(line, "max_current_ripple_a=") &&
+        textContains(line, "valid_samples=")) {
+      saw_health_thresholds = true;
+    }
+  }
+  TEST_ASSERT(saw_health_anchor,
+              "health check must report the selected internal diagnostic window");
+  TEST_ASSERT(saw_health_sample,
+              "health check must report per-segment feedback statistics");
+  TEST_ASSERT(saw_health_thresholds,
+              "health check summary must include thresholded feedback metrics");
 
   controller::ClampForceCommand clamp{};
   clamp.target_force = common::N{20.0};
   clamp.speed_mode = controller::ClampSpeedMode::NutLinearSpeed;
   clamp.max_nut_speed = common::MmPerS{1.0};
-  TEST_ASSERT(gripper->clampByForce(clamp).isOk(),
+  const auto clamp_result = gripper->clampByForce(clamp);
+  TEST_ASSERT(clamp_result.isOk(),
               "target-force clamp must succeed with simulated force proxy");
+  TEST_ASSERT(textContains(clamp_result.message(), "approach_ran=1"),
+              "force clamp must run the low-impact approach segment");
+  TEST_ASSERT(textContains(clamp_result.message(), "anomaly_suppressed="),
+              "force clamp result should expose anomaly suppression diagnostics");
 
   state = gripper->state();
   TEST_ASSERT(!state.enabled, "clamp must disable output after completion");

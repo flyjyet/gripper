@@ -85,6 +85,10 @@ DLLs into a clearer runtime dependency location such as `src/libs/`,
   2026-05-26 real-hardware tuning loop, including PreA/PreB behavior,
   friction-anomaly mapping, downstream homing/travel/health/clamp usage,
   research/open-source references, and a reusable control-library plan.
+- `03_control/generic_dual_hard_stop_axis_control_library_architecture.md`
+  defines the proposed reusable two-hard-stop linear-axis control library
+  architecture, module boundaries, core data structures, application bindings,
+  and migration route from the current gripper project.
 - `04_hardware/hardware_reference_notes.md` records the Damiao hardware path
   and the current console command sequence for real hardware step testing.
 - `04_hardware/cpp_bringup_can_probe_update_2026-05-20.md` records the
